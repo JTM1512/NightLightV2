@@ -6,6 +6,7 @@
 #include "NightlightWorldGenerator.generated.h"
 
 class USceneComponent;
+struct FRandomStream;
 
 // Builds and owns the logical map. Mesh construction comes later.
 UCLASS(Blueprintable)
@@ -24,6 +25,10 @@ public:
 	// Exposes the generated cells for mesh building, validation and debug drawing.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
 	const TArray<FNightlightCellData>& GetCells() const { return Cells; }
+
+	// Exposes ordered Rift-to-Core routes for later mesh and enemy systems.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
+	const TArray<FNightlightRouteData>& GetRoutes() const { return Routes; }
 
 	// Exposes the resolved seed so a generated map can be reproduced.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
@@ -53,10 +58,35 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Generation")
 	TArray<FNightlightCellData> Cells;
 
+	// Keeps every route separate and ordered, even though they share the Core.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Generation")
+	TArray<FNightlightRouteData> Routes;
+
 private:
+	friend class FNightlightRouteGenerationTest;
+
 	// Selects either a random session seed or the configured debug seed.
 	int32 ResolveSessionSeed() const;
 
 	// Converts a 2D coordinate into the flat Cells array index.
 	int32 GetCellIndex(int32 X, int32 Y, int32 Width) const;
+
+	// Selects distinct edges and builds their routes after terrain heights exist.
+	void GenerateRoutes(int32 Width, int32 Depth, const FIntPoint& CoreCoordinate, FRandomStream& RandomStream);
+
+	// Keeps each entrance away from corners and in a separate map quadrant.
+	FIntPoint SelectRouteEntrance(int32 EdgeIndex, int32 Width, int32 Depth, FRandomStream& RandomStream) const;
+
+	// Creates a shortest orthogonally connected route through a unique Core approach.
+	TArray<FIntPoint> BuildRouteToCore(
+		const FIntPoint& Start,
+		const FIntPoint& CoreCoordinate,
+		const FIntPoint& CoreApproach,
+		FRandomStream& RandomStream) const;
+
+	// Marks route cells and blends their heights into a traversable slope.
+	void ApplyRouteToGrid(FNightlightRouteData& Route, const FIntPoint& CoreCoordinate, int32 Width);
+
+	// Checks route count, ordering, connectivity, cell roles and overlap.
+	bool ValidateGeneratedRoutes(const FIntPoint& CoreCoordinate, int32 Width, int32 Depth) const;
 };

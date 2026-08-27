@@ -46,6 +46,21 @@ struct NIGHTLIGHTV2_API FNightlightCellData
 	bool bBuildable = true;
 };
 
+// Stores one complete enemy route in travel order from its Rift to the Core.
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightRouteData
+{
+	GENERATED_BODY()
+
+	// Identifies the edge cell where this route and its future spawner begin.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Generation")
+	FIntPoint RiftCoordinate = FIntPoint::ZeroValue;
+
+	// Ordered logical coordinates used later by enemy movement and route visuals.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Generation")
+	TArray<FIntPoint> CellsToCore;
+};
+
 // Keeps generation values editable without burying them in the algorithm.
 USTRUCT(BlueprintType)
 struct NIGHTLIGHTV2_API FNightlightGenerationSettings
@@ -71,6 +86,10 @@ struct NIGHTLIGHTV2_API FNightlightGenerationSettings
 	// Controls the maximum vertical strength of the noise result.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation", meta = (ClampMin = "0.0"))
 	float HeightScale = 300.0f;
+
+	// Number of distinct map edges that receive a route and Rift.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation", meta = (ClampMin = "3", ClampMax = "4"))
+	int32 RouteCount = 3;
 
 	// Debug seed used when random session seeds are disabled.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation")
