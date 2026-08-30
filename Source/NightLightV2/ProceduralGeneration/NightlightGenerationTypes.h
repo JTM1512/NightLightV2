@@ -95,6 +95,14 @@ struct NIGHTLIGHTV2_API FNightlightGenerationSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation", meta = (ClampMin = "3", ClampMax = "4"))
 	int32 RouteCount = 3;
 
+	// Number of approved defender positions requested from the generated terrain.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Anchors", meta = (ClampMin = "0"))
+	int32 AnchorCount = 12;
+
+	// Minimum straight-line distance between anchors, measured in grid cells.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Anchors", meta = (ClampMin = "1"))
+	int32 MinimumAnchorSpacing = 4;
+
 	// Debug seed used when random session seeds are disabled.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation")
 	int32 Seed = 1337;

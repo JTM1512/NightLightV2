@@ -89,22 +89,27 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 	GenerateRoutes(Width, Depth, CoreCoordinate, RandomStream);
 	const bool bRoutesValid = ValidateGeneratedRoutes(CoreCoordinate, Width, Depth);
 
-	// Log the seed and route result so failed maps can be reproduced during testing.
+	// Anchors are the final logical pass. Waiting for valid routes means defender
+	// positions can never reserve cells that enemy movement already needs.
 	if (bRoutesValid)
 	{
+		GenerateAnchors(Width, Depth, RandomStream);
 		RebuildTerrainMesh();
 
 		UE_LOG(
 			LogTemp,
 			Log,
-			TEXT("Nightlight generated a %dx%d logical grid with seed %d. Routes: %d. Route validation: passed."),
+			TEXT("Nightlight generated a %dx%d logical grid with seed %d. Routes: %d. Anchors: %d. Route validation: passed."),
 			Width,
 			Depth,
 			ActiveSeed,
-			Routes.Num());
+			Routes.Num(),
+			AnchorCoordinates.Num());
 	}
 	else
 	{
+		AnchorCoordinates.Reset();
+
 		// A failed logical result must not leave an older valid surface visible.
 		if (!IsTemplate() && TerrainMesh)
 		{
@@ -117,6 +122,43 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 			TEXT("Nightlight route validation failed for seed %d."),
 			ActiveSeed);
 	}
+}
+
+TArray<FVector> ANightlightWorldGenerator::GetAnchorWorldLocations() const
+{
+	TArray<FVector> WorldLocations;
+	WorldLocations.Reserve(AnchorCoordinates.Num());
+
+	const int32 Width = FMath::Max(GenerationSettings.GridWidth, 5);
+	const int32 Depth = FMath::Max(GenerationSettings.GridDepth, 5);
+	const float CellSize = FMath::Max(GenerationSettings.CellSize, 10.0f);
+
+	for (const FIntPoint& Coordinate : AnchorCoordinates)
+	{
+		// Ignore stale data safely if a designer changes the grid before regenerating.
+		if (Coordinate.X < 0 || Coordinate.X >= Width || Coordinate.Y < 0 || Coordinate.Y >= Depth)
+		{
+			continue;
+		}
+
+		const int32 CellIndex = GetCellIndex(Coordinate.X, Coordinate.Y, Width);
+		if (!Cells.IsValidIndex(CellIndex))
+		{
+			continue;
+		}
+
+		const FVector LocalLocation(
+			static_cast<double>(Coordinate.X) * CellSize,
+			static_cast<double>(Coordinate.Y) * CellSize,
+			Cells[CellIndex].Height);
+
+		// Anchor data starts in the generator's local grid space. TransformPosition
+		// applies the Actor's location, rotation and scale for Blueprint placement
+		// (Epic Games, Inc., 2026e).
+		WorldLocations.Add(GetActorTransform().TransformPosition(LocalLocation));
+	}
+
+	return WorldLocations;
 }
 
 void ANightlightWorldGenerator::RebuildTerrainMesh()
@@ -515,6 +557,120 @@ bool ANightlightWorldGenerator::ValidateGeneratedRoutes(
 	return true;
 }
 
+void ANightlightWorldGenerator::GenerateAnchors(
+	const int32 Width,
+	const int32 Depth,
+	FRandomStream& RandomStream)
+{
+	AnchorCoordinates.Reset();
+
+	const int32 RequestedAnchorCount = FMath::Max(GenerationSettings.AnchorCount, 0);
+	if (RequestedAnchorCount == 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Nightlight anchors requested: 0. Generated: 0."));
+		return;
+	}
+
+	TArray<FIntPoint> Candidates;
+
+	// The outside row is kept free for map entrances. Every remaining candidate
+	// also checks its neighbours so routes, Rifts and the Core keep one clear cell.
+	for (int32 Y = 1; Y < Depth - 1; ++Y)
+	{
+		for (int32 X = 1; X < Width - 1; ++X)
+		{
+			const FNightlightCellData& Cell = Cells[GetCellIndex(X, Y, Width)];
+			if (Cell.Type != ENightlightCellType::Ground || !Cell.bBuildable)
+			{
+				continue;
+			}
+
+			bool bClearOfReservedCells = true;
+			for (int32 OffsetY = -1; OffsetY <= 1 && bClearOfReservedCells; ++OffsetY)
+			{
+				for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+				{
+					const FNightlightCellData& Neighbour =
+						Cells[GetCellIndex(X + OffsetX, Y + OffsetY, Width)];
+					if (Neighbour.Type == ENightlightCellType::Path
+						|| Neighbour.Type == ENightlightCellType::Rift
+						|| Neighbour.Type == ENightlightCellType::Core)
+					{
+						bClearOfReservedCells = false;
+						break;
+					}
+				}
+			}
+
+			if (bClearOfReservedCells)
+			{
+				Candidates.Emplace(X, Y);
+			}
+		}
+	}
+
+	// Shuffle once with the active stream, then accept the first valid positions.
+	// This keeps the result simple and repeatable for a fixed seed
+	// (Epic Games, Inc., 2026c; Unreal Engine, 2015).
+	for (int32 Index = 0; Index < Candidates.Num() - 1; ++Index)
+	{
+		const int32 SwapIndex = RandomStream.RandRange(Index, Candidates.Num() - 1);
+		Candidates.Swap(Index, SwapIndex);
+	}
+
+	const int32 MinimumSpacing = FMath::Max(GenerationSettings.MinimumAnchorSpacing, 1);
+	const int32 MinimumSpacingSquared = MinimumSpacing * MinimumSpacing;
+
+	for (const FIntPoint& Candidate : Candidates)
+	{
+		bool bFarEnoughFromOtherAnchors = true;
+		for (const FIntPoint& ExistingAnchor : AnchorCoordinates)
+		{
+			const FIntPoint Difference = Candidate - ExistingAnchor;
+			const int32 DistanceSquared = Difference.X * Difference.X + Difference.Y * Difference.Y;
+			if (DistanceSquared < MinimumSpacingSquared)
+			{
+				bFarEnoughFromOtherAnchors = false;
+				break;
+			}
+		}
+
+		if (!bFarEnoughFromOtherAnchors)
+		{
+			continue;
+		}
+
+		AnchorCoordinates.Add(Candidate);
+		FNightlightCellData& AnchorCell = Cells[GetCellIndex(Candidate.X, Candidate.Y, Width)];
+		AnchorCell.Type = ENightlightCellType::PlacementAnchor;
+		AnchorCell.bBuildable = true;
+
+		if (AnchorCoordinates.Num() >= RequestedAnchorCount)
+		{
+			break;
+		}
+	}
+
+	if (AnchorCoordinates.Num() < RequestedAnchorCount)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Nightlight anchors requested: %d. Generated: %d. The remaining terrain did not meet clearance and spacing rules."),
+			RequestedAnchorCount,
+			AnchorCoordinates.Num());
+	}
+	else
+	{
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("Nightlight anchors requested: %d. Generated: %d."),
+			RequestedAnchorCount,
+			AnchorCoordinates.Num());
+	}
+}
+
 int32 ANightlightWorldGenerator::ResolveSessionSeed() const
 {
 	// Random for normal play; fixed for repeatable testing.
@@ -546,6 +702,15 @@ Epic Games, Inc., 2026c. Random Streams in Unreal Engine. [online] Available at:
 
 Epic Games, Inc., 2026d. Create Mesh Section. [online] Available at:
 <https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Components/ProceduralMesh/CreateMeshSection>
+[Accessed 30 August 2026].
+
+Epic Games, Inc., 2026e. TTransform::TransformPosition. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/Math/TTransform/TransformPosition>
+[Accessed 30 August 2026].
+
+Epic Games, Inc., 2026f. Exposing Gameplay Elements to Blueprints Visual
+Scripting in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/unreal-engine/exposing-gameplay-elements-to-blueprints-visual-scripting-in-unreal-engine>
 [Accessed 30 August 2026].
 
 fettis GameDev, 2022. Terrain generation in C++ for Beginners - Unreal Engine

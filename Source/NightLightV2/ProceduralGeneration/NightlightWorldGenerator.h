@@ -42,6 +42,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
 	const TArray<FNightlightRouteData>& GetRoutes() const { return Routes; }
 
+	// Exposes the approved logical cells as a data-only Blueprint node because
+	// reading the generated contract does not change it (Epic Games, Inc., 2026f).
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Anchors")
+	const TArray<FIntPoint>& GetAnchorCoordinates() const { return AnchorCoordinates; }
+
+	// Converts every anchor into its terrain-aligned position in the level.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Anchors")
+	TArray<FVector> GetAnchorWorldLocations() const;
+
 	// Exposes the resolved seed so a generated map can be reproduced.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
 	int32 GetActiveSeed() const { return ActiveSeed; }
@@ -86,6 +95,10 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Generation")
 	TArray<FNightlightRouteData> Routes;
 
+	// Stores the valid terrain cells offered to the teammate's defender system.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Generation|Anchors")
+	TArray<FIntPoint> AnchorCoordinates;
+
 private:
 	friend class FNightlightRouteGenerationTest;
 
@@ -116,6 +129,9 @@ private:
 
 	// Checks route count, ordering, connectivity, cell roles and overlap.
 	bool ValidateGeneratedRoutes(const FIntPoint& CoreCoordinate, int32 Width, int32 Depth) const;
+
+	// Selects repeatable Ground cells after routes have reserved their space.
+	void GenerateAnchors(int32 Width, int32 Depth, FRandomStream& RandomStream);
 
 	// Converts the completed grid into deterministic render and collision arrays.
 	bool BuildTerrainMeshData(FNightlightTerrainMeshData& OutMeshData) const;
