@@ -6,9 +6,21 @@
 #include "NightlightWorldGenerator.generated.h"
 
 class USceneComponent;
+class UMaterialInterface;
+class UProceduralMeshComponent;
 struct FRandomStream;
 
-// Builds and owns the logical map. Mesh construction comes later.
+// Internal arrays used to submit and verify one generated terrain section.
+struct FNightlightTerrainMeshData
+{
+	TArray<FVector> Vertices;
+	TArray<int32> Triangles;
+	TArray<FVector> Normals;
+	TArray<FVector2D> UV0;
+	TArray<FLinearColor> VertexColors;
+};
+
+// Builds the logical map and converts it into one runtime terrain surface.
 UCLASS(Blueprintable)
 class NIGHTLIGHTV2_API ANightlightWorldGenerator : public AActor
 {
@@ -42,6 +54,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> SceneRoot;
 
+	// Owns the generated terrain surface and its runtime collision.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UProceduralMeshComponent> TerrainMesh;
+
 	// Groups the designer-facing generation values in one place.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation")
 	FNightlightGenerationSettings GenerationSettings;
@@ -49,6 +65,14 @@ protected:
 	// Allows tests or setup code to generate the grid manually.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation")
 	bool bGenerateOnBeginPlay = true;
+
+	// Allows designers to replace the terrain appearance without changing C++.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Mesh")
+	TObjectPtr<UMaterialInterface> TerrainMaterial;
+
+	// Creates query and physics collision from the generated terrain triangles.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Mesh")
+	bool bCreateTerrainCollision = true;
 
 	// Records the seed actually used by the current map.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Generation")
@@ -64,6 +88,9 @@ protected:
 
 private:
 	friend class FNightlightRouteGenerationTest;
+
+	// Keeps visible geometry and collision synchronized with the logical grid.
+	void RebuildTerrainMesh();
 
 	// Selects either a random session seed or the configured debug seed.
 	int32 ResolveSessionSeed() const;
@@ -89,4 +116,10 @@ private:
 
 	// Checks route count, ordering, connectivity, cell roles and overlap.
 	bool ValidateGeneratedRoutes(const FIntPoint& CoreCoordinate, int32 Width, int32 Depth) const;
+
+	// Converts the completed grid into deterministic render and collision arrays.
+	bool BuildTerrainMeshData(FNightlightTerrainMeshData& OutMeshData) const;
+
+	// Maps logical cell roles to material-readable vertex colours.
+	static FLinearColor GetCellVertexColor(ENightlightCellType CellType);
 };

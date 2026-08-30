@@ -79,6 +79,10 @@ struct NIGHTLIGHTV2_API FNightlightGenerationSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation", meta = (ClampMin = "10.0"))
 	float CellSize = 200.0f;
 
+	// Controls how often the terrain material repeats across neighbouring cells.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Mesh", meta = (ClampMin = "0.001"))
+	float UVScale = 0.25f;
+
 	// Controls how quickly terrain height changes between cells.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation", meta = (ClampMin = "0.0001"))
 	float NoiseFrequency = 0.075f;

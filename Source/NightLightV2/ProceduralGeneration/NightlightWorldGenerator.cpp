@@ -1,5 +1,6 @@
 #include "NightlightWorldGenerator.h"
 #include "Components/SceneComponent.h"
+#include "ProceduralMeshComponent.h"
 #include "Math/RandomStream.h"
 
 ANightlightWorldGenerator::ANightlightWorldGenerator()
@@ -10,6 +11,14 @@ ANightlightWorldGenerator::ANightlightWorldGenerator()
 	// The root keeps future mesh and debug components under one transform.
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
+
+	// One shared heightfield section is enough for the current 31x31 map.
+	TerrainMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("TerrainMesh"));
+	TerrainMesh->SetupAttachment(SceneRoot);
+	TerrainMesh->bUseComplexAsSimpleCollision = true;
+	TerrainMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	TerrainMesh->SetCollisionObjectType(ECC_WorldStatic);
+	TerrainMesh->SetCollisionResponseToAllChannels(ECR_Block);
 }
 
 void ANightlightWorldGenerator::BeginPlay()
@@ -83,6 +92,8 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 	// Log the seed and route result so failed maps can be reproduced during testing.
 	if (bRoutesValid)
 	{
+		RebuildTerrainMesh();
+
 		UE_LOG(
 			LogTemp,
 			Log,
@@ -94,11 +105,169 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 	}
 	else
 	{
+		// A failed logical result must not leave an older valid surface visible.
+		if (!IsTemplate() && TerrainMesh)
+		{
+			TerrainMesh->ClearAllMeshSections();
+		}
+
 		UE_LOG(
 			LogTemp,
 			Error,
 			TEXT("Nightlight route validation failed for seed %d."),
 			ActiveSeed);
+	}
+}
+
+void ANightlightWorldGenerator::RebuildTerrainMesh()
+{
+	// Automation builds logical data on the class default object, which has no
+	// gameplay world in which to render or cook collision.
+	if (IsTemplate() || !TerrainMesh)
+	{
+		return;
+	}
+
+	FNightlightTerrainMeshData MeshData;
+	TerrainMesh->ClearAllMeshSections();
+	if (!BuildTerrainMeshData(MeshData))
+	{
+		UE_LOG(LogTemp, Error, TEXT("Nightlight could not build terrain mesh data from the logical grid."));
+		return;
+	}
+
+	TArray<FProcMeshTangent> Tangents;
+	Tangents.Reserve(MeshData.Normals.Num());
+	for (const FVector& Normal : MeshData.Normals)
+	{
+		// The tangent follows local X while remaining perpendicular to the slope.
+		const FVector TangentX = FVector::CrossProduct(FVector::YAxisVector, Normal).GetSafeNormal();
+		Tangents.Emplace(TangentX, false);
+	}
+
+	TerrainMesh->SetCollisionEnabled(
+		bCreateTerrainCollision ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
+
+	// CreateMeshSection consumes the same arrays for rendering and optional
+	// collision, so the player cannot collide with a different terrain shape
+	// (Epic Games, Inc., 2026d).
+	TerrainMesh->CreateMeshSection_LinearColor(
+		0,
+		MeshData.Vertices,
+		MeshData.Triangles,
+		MeshData.Normals,
+		MeshData.UV0,
+		MeshData.VertexColors,
+		Tangents,
+		bCreateTerrainCollision,
+		false);
+
+	if (TerrainMaterial)
+	{
+		TerrainMesh->SetMaterial(0, TerrainMaterial);
+	}
+
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("Nightlight rebuilt runtime terrain with %d vertices and %d triangles. Collision: %s."),
+		MeshData.Vertices.Num(),
+		MeshData.Triangles.Num() / 3,
+		bCreateTerrainCollision ? TEXT("enabled") : TEXT("disabled"));
+}
+
+bool ANightlightWorldGenerator::BuildTerrainMeshData(FNightlightTerrainMeshData& OutMeshData) const
+{
+	OutMeshData = FNightlightTerrainMeshData();
+
+	const int32 Width = FMath::Max(GenerationSettings.GridWidth, 5);
+	const int32 Depth = FMath::Max(GenerationSettings.GridDepth, 5);
+	if (Cells.Num() != Width * Depth)
+	{
+		return false;
+	}
+
+	const float CellSize = FMath::Max(GenerationSettings.CellSize, 10.0f);
+	const float UVScale = FMath::Max(GenerationSettings.UVScale, 0.001f);
+	const int32 VertexCount = Width * Depth;
+	const int32 TriangleIndexCount = (Width - 1) * (Depth - 1) * 6;
+
+	OutMeshData.Vertices.Reserve(VertexCount);
+	OutMeshData.Triangles.Reserve(TriangleIndexCount);
+	OutMeshData.Normals.SetNumUninitialized(VertexCount);
+	OutMeshData.UV0.Reserve(VertexCount);
+	OutMeshData.VertexColors.Reserve(VertexCount);
+
+	for (const FNightlightCellData& Cell : Cells)
+	{
+		// Logical coordinates stay authoritative for both position and cell role.
+		OutMeshData.Vertices.Emplace(
+			static_cast<double>(Cell.GridCoordinate.X) * CellSize,
+			static_cast<double>(Cell.GridCoordinate.Y) * CellSize,
+			Cell.Height);
+		OutMeshData.UV0.Emplace(
+			static_cast<double>(Cell.GridCoordinate.X) * UVScale,
+			static_cast<double>(Cell.GridCoordinate.Y) * UVScale);
+		OutMeshData.VertexColors.Add(GetCellVertexColor(Cell.Type));
+	}
+
+	// Shared vertices keep the surface continuous: each neighbouring sample pair
+	// forms two consistently wound triangles (fettis GameDev, 2022).
+	for (int32 Y = 0; Y < Depth - 1; ++Y)
+	{
+		for (int32 X = 0; X < Width - 1; ++X)
+		{
+			const int32 BottomLeft = GetCellIndex(X, Y, Width);
+			const int32 BottomRight = GetCellIndex(X + 1, Y, Width);
+			const int32 TopLeft = GetCellIndex(X, Y + 1, Width);
+			const int32 TopRight = GetCellIndex(X + 1, Y + 1, Width);
+
+			OutMeshData.Triangles.Append(
+				{ BottomLeft, BottomRight, TopLeft, BottomRight, TopRight, TopLeft });
+		}
+	}
+
+	// Central differences produce smooth normals from the same height samples.
+	// Edge samples use their closest available neighbour instead of inventing data.
+	for (int32 Y = 0; Y < Depth; ++Y)
+	{
+		for (int32 X = 0; X < Width; ++X)
+		{
+			const int32 LeftX = FMath::Max(X - 1, 0);
+			const int32 RightX = FMath::Min(X + 1, Width - 1);
+			const int32 LowerY = FMath::Max(Y - 1, 0);
+			const int32 UpperY = FMath::Min(Y + 1, Depth - 1);
+
+			const FVector TangentX =
+				OutMeshData.Vertices[GetCellIndex(RightX, Y, Width)]
+				- OutMeshData.Vertices[GetCellIndex(LeftX, Y, Width)];
+			const FVector TangentY =
+				OutMeshData.Vertices[GetCellIndex(X, UpperY, Width)]
+				- OutMeshData.Vertices[GetCellIndex(X, LowerY, Width)];
+
+			OutMeshData.Normals[GetCellIndex(X, Y, Width)] =
+				FVector::CrossProduct(TangentX, TangentY).GetSafeNormal(SMALL_NUMBER, FVector::UpVector);
+		}
+	}
+
+	return true;
+}
+
+FLinearColor ANightlightWorldGenerator::GetCellVertexColor(const ENightlightCellType CellType)
+{
+	switch (CellType)
+	{
+	case ENightlightCellType::Path:
+		return FLinearColor(0.20f, 0.45f, 0.85f);
+	case ENightlightCellType::Core:
+		return FLinearColor(0.85f, 0.75f, 0.20f);
+	case ENightlightCellType::Rift:
+		return FLinearColor(0.55f, 0.10f, 0.75f);
+	case ENightlightCellType::PlacementAnchor:
+		return FLinearColor(0.20f, 0.80f, 0.65f);
+	case ENightlightCellType::Ground:
+	default:
+		return FLinearColor(0.08f, 0.22f, 0.10f);
 	}
 }
 
@@ -374,6 +543,14 @@ Epic Games, Inc., 2026b. FMath::PerlinNoise2D. [online] Available at:
 Epic Games, Inc., 2026c. Random Streams in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/unreal-engine/random-streams-in-unreal-engine>
 [Accessed 28 August 2026].
+
+Epic Games, Inc., 2026d. Create Mesh Section. [online] Available at:
+<https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Components/ProceduralMesh/CreateMeshSection>
+[Accessed 30 August 2026].
+
+fettis GameDev, 2022. Terrain generation in C++ for Beginners - Unreal Engine
+tutorial. [video online] Available at: <https://www.youtube.com/watch?v=sNZ2g4qah28>
+[Accessed 30 August 2026].
 
 Unreal Engine, 2015. Blueprint Quickshot: Random Streams | 12 | v4.7 Tutorial
 Series. [video online] Available at: <https://www.youtube.com/watch?v=kGpsMEMDrjQ>
