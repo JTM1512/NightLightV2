@@ -42,6 +42,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
 	const TArray<FNightlightRouteData>& GetRoutes() const { return Routes; }
 
+	// Turns one generated route into world positions that match the terrain height.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Routes")
+	TArray<FVector> GetRouteWorldLocations(int32 RouteIndex) const;
+
 	// Exposes the approved logical cells as a data-only Blueprint node because
 	// reading the generated contract does not change it (Epic Games, Inc., 2026f).
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Anchors")

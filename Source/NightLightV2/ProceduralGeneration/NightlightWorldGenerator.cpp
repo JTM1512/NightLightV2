@@ -124,6 +124,49 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 	}
 }
 
+TArray<FVector> ANightlightWorldGenerator::GetRouteWorldLocations(const int32 RouteIndex) const
+{
+	TArray<FVector> WorldLocations;
+	if (!Routes.IsValidIndex(RouteIndex))
+	{
+		return WorldLocations;
+	}
+
+	const int32 Width = FMath::Max(GenerationSettings.GridWidth, 5);
+	const int32 Depth = FMath::Max(GenerationSettings.GridDepth, 5);
+	const float CellSize = FMath::Max(GenerationSettings.CellSize, 10.0f);
+	const FNightlightRouteData& Route = Routes[RouteIndex];
+	WorldLocations.Reserve(Route.CellsToCore.Num());
+
+	for (const FIntPoint& Coordinate : Route.CellsToCore)
+	{
+		// Return no route if the saved coordinates no longer match the current grid.
+		if (Coordinate.X < 0 || Coordinate.X >= Width || Coordinate.Y < 0 || Coordinate.Y >= Depth)
+		{
+			WorldLocations.Reset();
+			return WorldLocations;
+		}
+
+		const int32 CellIndex = GetCellIndex(Coordinate.X, Coordinate.Y, Width);
+		if (!Cells.IsValidIndex(CellIndex))
+		{
+			WorldLocations.Reset();
+			return WorldLocations;
+		}
+
+		const FVector LocalLocation(
+			static_cast<double>(Coordinate.X) * CellSize,
+			static_cast<double>(Coordinate.Y) * CellSize,
+			Cells[CellIndex].Height);
+
+		// Use the same cell height and generator transform as the terrain and
+		// Lucid Anchors (Epic Games, Inc., 2026e).
+		WorldLocations.Add(GetActorTransform().TransformPosition(LocalLocation));
+	}
+
+	return WorldLocations;
+}
+
 TArray<FVector> ANightlightWorldGenerator::GetAnchorWorldLocations() const
 {
 	TArray<FVector> WorldLocations;
