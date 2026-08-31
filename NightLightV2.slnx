@@ -10,14 +10,14 @@
     <Platform Name="Win64-arm64ec" />
   </Configurations>
   <Folder Name="/Engine/">
-    <Project Path="Intermediate/ProjectFiles/UE5.vcxproj" Id="103b458f-2ac4-39a4-bc08-5e5ca403d5f6">
+    <Project Path="Intermediate/ProjectFiles/UE5.vcxproj" Id="3b24ea0d-71c0-3983-920b-11e40e1a0a08">
       <BuildType Project="BuiltWithUnrealBuildTool" />
       <Platform Project="Win64" />
       <Build Project="false" />
     </Project>
   </Folder>
   <Folder Name="/Games/">
-    <Project Path="Intermediate/ProjectFiles/NightLightV2.vcxproj" Id="f005f3c7-9018-33f0-b6ad-7b31ff79c3bd">
+    <Project Path="Intermediate/ProjectFiles/NightLightV2.vcxproj" Id="b2b6fb2a-6092-3375-90d2-3c3dc463f85d">
       <BuildType Solution="DebugGame Editor|Win64" Project="DebugGame_Editor" />
       <BuildType Solution="DebugGame Editor|Win64-arm64" Project="Win64_arm64_DebugGame_Editor" />
       <BuildType Solution="DebugGame Editor|Win64-arm64ec" Project="Win64_arm64ec_DebugGame_Editor" />
@@ -34,180 +34,180 @@
     </Project>
   </Folder>
   <Folder Name="/Programs/">
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/AutomationTool.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/AutomationTool.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/UnrealBuildTool/UnrealBuildTool.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/UnrealBuildTool/UnrealBuildTool.csproj">
       <BuildType Project="Development" />
     </Project>
   </Folder>
   <Folder Name="/Programs/Automation/">
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Platforms/VisionOS/Source/Programs/AutomationTool/VisionOS.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Platforms/VisionOS/Source/Programs/AutomationTool/VisionOS.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Android/Android.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Android/Android.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Apple/Apple.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Apple/Apple.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/AutomationUtils/AutomationUtils.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/AutomationUtils/AutomationUtils.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/BuildGraph/BuildGraph.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/BuildGraph/BuildGraph.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/CookedEditor/CookedEditor.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/CookedEditor/CookedEditor.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/CrowdinLocalization/CrowdinLocalization.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/CrowdinLocalization/CrowdinLocalization.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Gauntlet/Gauntlet.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Gauntlet/Gauntlet.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Insights/Insights.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Insights/Insights.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/IOS/IOS.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/IOS/IOS.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Linux/Linux.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Linux/Linux.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/LiveLinkHub/LiveLinkHub.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/LiveLinkHub/LiveLinkHub.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Localization/Localization.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Localization/Localization.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/LowLevelTests/LowLevelTests.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/LowLevelTests/LowLevelTests.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Mac/Mac.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Mac/Mac.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Microsoft/Microsoft.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Microsoft/Microsoft.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Mutable/Mutable.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Mutable/Mutable.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/OneSkyLocalization/OneSkyLocalization.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/OneSkyLocalization/OneSkyLocalization.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Scripts/AutomationScripts.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Scripts/AutomationScripts.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/SmartlingLocalization/SmartlingLocalization.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/SmartlingLocalization/SmartlingLocalization.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/SteamDeck/SteamDeck.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/SteamDeck/SteamDeck.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Turnkey/Turnkey.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Turnkey/Turnkey.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/TVOS/TVOS.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/TVOS/TVOS.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Win/Win.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/Win/Win.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/XLocLocalization/XLocLocalization.Automation.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/AutomationTool/XLocLocalization/XLocLocalization.Automation.csproj">
       <BuildType Project="Development" />
     </Project>
   </Folder>
   <Folder Name="/Programs/Shared/">
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Analytics.Generators/EpicGames.Analytics.Generators.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Analytics.Generators/EpicGames.Analytics.Generators.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Analytics.PerformanceTrends/EpicGames.Analytics.PerformanceTrends.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Analytics.PerformanceTrends/EpicGames.Analytics.PerformanceTrends.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Analytics.Telemetry/EpicGames.Analytics.Telemetry.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Analytics.Telemetry/EpicGames.Analytics.Telemetry.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.AspNet/EpicGames.AspNet.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.AspNet/EpicGames.AspNet.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Benchmarks/EpicGames.Benchmarks.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Benchmarks/EpicGames.Benchmarks.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Build/EpicGames.Build.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Build/EpicGames.Build.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.BuildGraph/EpicGames.BuildGraph.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.BuildGraph/EpicGames.BuildGraph.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Core/EpicGames.Core.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Core/EpicGames.Core.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Horde/EpicGames.Horde.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Horde/EpicGames.Horde.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.IoHash/EpicGames.IoHash.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.IoHash/EpicGames.IoHash.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.LogMatchers/EpicGames.LogMatchers.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.LogMatchers/EpicGames.LogMatchers.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.MongoDB/EpicGames.MongoDB.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.MongoDB/EpicGames.MongoDB.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.MsBuild/EpicGames.MsBuild.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.MsBuild/EpicGames.MsBuild.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.OIDC/EpicGames.OIDC.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.OIDC/EpicGames.OIDC.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Oodle/EpicGames.Oodle.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Oodle/EpicGames.Oodle.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Perforce.Fixture/EpicGames.Perforce.Fixture.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Perforce.Fixture/EpicGames.Perforce.Fixture.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Perforce.Managed/EpicGames.Perforce.Managed.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Perforce.Managed/EpicGames.Perforce.Managed.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Perforce/EpicGames.Perforce.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Perforce/EpicGames.Perforce.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.ProjectStore/EpicGames.ProjectStore.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.ProjectStore/EpicGames.ProjectStore.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Redis/EpicGames.Redis.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Redis/EpicGames.Redis.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.ScriptBuild/EpicGames.ScriptBuild.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.ScriptBuild/EpicGames.ScriptBuild.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Serialization/EpicGames.Serialization.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Serialization/EpicGames.Serialization.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Slack/EpicGames.Slack.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Slack/EpicGames.Slack.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Tracing/EpicGames.Tracing.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.Tracing/EpicGames.Tracing.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.UBA/EpicGames.UBA.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.UBA/EpicGames.UBA.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.UHT/EpicGames.UHT.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Source/Programs/Shared/EpicGames.UHT/EpicGames.UHT.csproj">
       <BuildType Project="Development" />
     </Project>
   </Folder>
   <Folder Name="/Programs/UnrealBuildTool.Plugins/">
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Plugins/ScriptPlugin/Source/ScriptGeneratorUbtPlugin/ScriptGeneratorUbtPlugin.ubtplugin.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Plugins/ScriptPlugin/Source/ScriptGeneratorUbtPlugin/ScriptGeneratorUbtPlugin.ubtplugin.csproj">
       <BuildType Project="Development" />
     </Project>
   </Folder>
   <Folder Name="/Rules/">
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Intermediate/Build/BuildRulesProjects/UE5ProgramRules/UE5ProgramRules.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Intermediate/Build/BuildRulesProjects/UE5ProgramRules/UE5ProgramRules.csproj">
       <BuildType Project="Development" />
     </Project>
-    <Project Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Intermediate/Build/BuildRulesProjects/UE5Rules/UE5Rules.csproj">
+    <Project Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Intermediate/Build/BuildRulesProjects/UE5Rules/UE5Rules.csproj">
       <BuildType Project="Development" />
     </Project>
     <Project Path="Intermediate/Build/BuildRulesProjects/NightLightV2ModuleRules/NightLightV2ModuleRules.csproj">
@@ -215,9 +215,9 @@
     </Project>
   </Folder>
   <Folder Name="/Visualizers/">
-    <File Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natjmc" />
-    <File Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natstepfilter" />
-    <File Path="../../../../../Program Files/Epic Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natvis" />
+    <File Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natjmc" />
+    <File Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natstepfilter" />
+    <File Path="../../../../Program Files/Epic Games/UE_5.8/Engine/Extras/VisualStudioDebugging/Unreal.natvis" />
   </Folder>
   <Properties Name="ddbf523f-7eb6-4887-bd51-85a714ff87eb">
     <Property Name="AvailablePlatforms" Value="Win64" />
