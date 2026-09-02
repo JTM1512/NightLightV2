@@ -46,6 +46,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Routes")
 	TArray<FVector> GetRouteWorldLocations(int32 RouteIndex) const;
 
+	// Uses the saved Core height and generator transform so the placed Actor matches the terrain.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
+	bool GetCoreWorldLocation(FVector& OutCoreWorldLocation) const;
+
 	// Exposes the approved logical cells as a data-only Blueprint node because
 	// reading the generated contract does not change it (Epic Games, Inc., 2026f).
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Anchors")

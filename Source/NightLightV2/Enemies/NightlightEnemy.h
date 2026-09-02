@@ -5,6 +5,13 @@
 #include "NightlightEnemy.generated.h"
 
 class USceneComponent;
+class ANightlightDreamCore;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FNightlightEnemyHealthChangedSignature,
+	float, CurrentHealth,
+	float, MaxHealth);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNightlightEnemyDiedSignature);
 
 // An enemy follows one generated route from its Rift to the Dream Core.
 UCLASS(Blueprintable)
@@ -21,7 +28,32 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy")
 	void AssignRoute(const TArray<FVector>& RoutePoints);
 
+	// Set by the spawner so every route damages the same Core.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy")
+	void AssignDreamCore(ANightlightDreamCore* InDreamCore);
+
+	// Defenders only call this function. Their targeting and attack code stays in the defender.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy")
+	void ApplyDamage(float DamageAmount);
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy")
+	bool IsDead() const { return bIsDead; }
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy")
+	float GetCurrentHealth() const { return CurrentHealth; }
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy")
+	float GetMaxHealth() const { return MaxHealth; }
+
+	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy")
+	FNightlightEnemyHealthChangedSignature OnHealthChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy")
+	FNightlightEnemyDiedSignature OnEnemyDied;
+
 protected:
+	virtual void BeginPlay() override;
+
 	// Blueprint children can attach their mesh and other visuals to this root.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -31,6 +63,15 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float WaypointAcceptanceDistance = 10.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
+	float MaxHealth = 100.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")
+	float CurrentHealth = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
+	float CoreDamage = 10.0f;
 
 	// The route is copied so the enemy does not need to keep checking the generator.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")
@@ -42,12 +83,19 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")
 	bool bHasReachedCore = false;
 
-	// Later Core damage or other gameplay can be connected to this event.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")
+	bool bIsDead = false;
+
+	// Lets the enemy Blueprint react just before it is removed at the Core.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy", meta = (DisplayName = "On Core Reached"))
 	void OnCoreReached();
 
 private:
+	UPROPERTY()
+	TObjectPtr<ANightlightDreamCore> DreamCore;
+
 	void MoveAlongRoute(float DeltaTime);
 	void ReachNextWaypoint();
 	void HandleCoreReached();
+	void Die();
 };

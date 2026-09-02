@@ -1,4 +1,5 @@
 #include "NightlightEnemy.h"
+#include "../Core/NightlightDreamCore.h"
 #include "Components/SceneComponent.h"
 
 ANightlightEnemy::ANightlightEnemy()
@@ -8,6 +9,22 @@ ANightlightEnemy::ANightlightEnemy()
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
+}
+
+void ANightlightEnemy::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Blueprint enemy types can change MaxHealth, so copy it when the game starts.
+	MaxHealth = FMath::Max(MaxHealth, 0.0f);
+	CurrentHealth = MaxHealth;
+	bIsDead = false;
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+
+	if (CurrentHealth <= 0.0f)
+	{
+		Die();
+	}
 }
 
 void ANightlightEnemy::Tick(const float DeltaTime)
@@ -22,6 +39,10 @@ void ANightlightEnemy::AssignRoute(const TArray<FVector>& RoutePoints)
 	CurrentWaypointIndex = INDEX_NONE;
 	bHasReachedCore = false;
 	SetActorTickEnabled(false);
+	if (bIsDead)
+	{
+		return;
+	}
 
 	if (AssignedRoutePoints.Num() < 2)
 	{
@@ -35,9 +56,33 @@ void ANightlightEnemy::AssignRoute(const TArray<FVector>& RoutePoints)
 	SetActorTickEnabled(true);
 }
 
+void ANightlightEnemy::AssignDreamCore(ANightlightDreamCore* const InDreamCore)
+{
+	DreamCore = InDreamCore;
+}
+
+void ANightlightEnemy::ApplyDamage(const float DamageAmount)
+{
+	if (bIsDead || DamageAmount <= 0.0f)
+	{
+		return;
+	}
+
+	// A strong attack can reach zero, but health must never become negative.
+	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+
+	if (CurrentHealth > 0.0f)
+	{
+		return;
+	}
+
+	Die();
+}
+
 void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 {
-	if (bHasReachedCore || !AssignedRoutePoints.IsValidIndex(CurrentWaypointIndex))
+	if (bIsDead || bHasReachedCore || !AssignedRoutePoints.IsValidIndex(CurrentWaypointIndex))
 	{
 		SetActorTickEnabled(false);
 		return;
@@ -73,9 +118,36 @@ void ANightlightEnemy::ReachNextWaypoint()
 
 void ANightlightEnemy::HandleCoreReached()
 {
+	if (bIsDead || bHasReachedCore)
+	{
+		return;
+	}
+
+	// Set this before the damage and event so another Tick cannot repeat the arrival.
 	bHasReachedCore = true;
 	SetActorTickEnabled(false);
+
+	if (IsValid(DreamCore) && !DreamCore->IsCoreDestroyed())
+	{
+		DreamCore->ApplyCoreDamage(FMath::Max(CoreDamage, 0.0f));
+	}
+
 	OnCoreReached();
+	Destroy();
+}
+
+void ANightlightEnemy::Die()
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	// Stop movement before the event because a dead enemy must never reach the Core.
+	bIsDead = true;
+	SetActorTickEnabled(false);
+	OnEnemyDied.Broadcast();
+	Destroy();
 }
 
 /*

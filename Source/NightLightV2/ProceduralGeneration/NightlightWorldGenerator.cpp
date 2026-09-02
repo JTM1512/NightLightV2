@@ -167,6 +167,29 @@ TArray<FVector> ANightlightWorldGenerator::GetRouteWorldLocations(const int32 Ro
 	return WorldLocations;
 }
 
+bool ANightlightWorldGenerator::GetCoreWorldLocation(FVector& OutCoreWorldLocation) const
+{
+	OutCoreWorldLocation = FVector::ZeroVector;
+
+	const int32 Width = FMath::Max(GenerationSettings.GridWidth, 5);
+	const int32 Depth = FMath::Max(GenerationSettings.GridDepth, 5);
+	const FIntPoint CoreCoordinate(Width / 2, Depth / 2);
+	const int32 CoreIndex = GetCellIndex(CoreCoordinate.X, CoreCoordinate.Y, Width);
+
+	if (!Cells.IsValidIndex(CoreIndex) || Cells[CoreIndex].Type != ENightlightCellType::Core)
+	{
+		return false;
+	}
+
+	const float CellSize = FMath::Max(GenerationSettings.CellSize, 10.0f);
+	const FVector LocalLocation(
+		static_cast<double>(CoreCoordinate.X) * CellSize,
+		static_cast<double>(CoreCoordinate.Y) * CellSize,
+		Cells[CoreIndex].Height);
+	OutCoreWorldLocation = GetActorTransform().TransformPosition(LocalLocation);
+	return true;
+}
+
 TArray<FVector> ANightlightWorldGenerator::GetAnchorWorldLocations() const
 {
 	TArray<FVector> WorldLocations;

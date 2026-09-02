@@ -6,6 +6,7 @@
 #include "NightlightEnemySpawner.generated.h"
 
 class ANightlightEnemy;
+class ANightlightDreamCore;
 class ANightlightWorldGenerator;
 class USceneComponent;
 
@@ -36,6 +37,10 @@ protected:
 	// Select the exact generator that owns the routes used by this spawner.
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning")
 	TObjectPtr<ANightlightWorldGenerator> WorldGenerator;
+
+	// Assign the Core placed in the level. Every spawned enemy receives this reference.
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning")
+	TObjectPtr<ANightlightDreamCore> DreamCore;
 
 	// This can use the C++ enemy or a Blueprint child with its own mesh.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning")

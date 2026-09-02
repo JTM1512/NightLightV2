@@ -1,5 +1,6 @@
 #include "NightlightEnemySpawner.h"
 #include "NightlightEnemy.h"
+#include "../Core/NightlightDreamCore.h"
 #include "../ProceduralGeneration/NightlightWorldGenerator.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -42,6 +43,22 @@ void ANightlightEnemySpawner::StartSpawning()
 		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because no Enemy Class is assigned."));
 		return;
 	}
+
+	if (!DreamCore)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because no Dream Core is assigned."));
+		return;
+	}
+
+	FVector CoreWorldLocation;
+	if (!WorldGenerator->GetCoreWorldLocation(CoreWorldLocation))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because the generator has no valid Core position."));
+		return;
+	}
+
+	// Keep the placed Core on the same generated point where every route ends.
+	DreamCore->SetActorLocation(CoreWorldLocation);
 
 	const TArray<FNightlightRouteData>& Routes = WorldGenerator->GetRoutes();
 	for (int32 RouteIndex = 0; RouteIndex < Routes.Num(); ++RouteIndex)
@@ -107,6 +124,7 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 		return;
 	}
 
+	Enemy->AssignDreamCore(DreamCore);
 	Enemy->AssignRoute(RoutePoints);
 	NextRouteIndex = (RouteIndex + 1) % CachedRouteWorldLocations.Num();
 }
