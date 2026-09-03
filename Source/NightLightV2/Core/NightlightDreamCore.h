@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TimerManager.h"
 #include "NightlightDreamCore.generated.h"
 
 class USceneComponent;
@@ -57,6 +58,19 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Dream Core")
 	float CurrentHealth = 100.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Dream Core|Attack", meta = (ClampMin = "0.0"))
+	float AttackRange = 1000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Dream Core|Attack", meta = (ClampMin = "0.0"))
+	float AttackDamage = 20.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Dream Core|Attack", meta = (ClampMin = "0.1"))
+	float AttackInterval = 1.0f;
+
 private:
 	bool bCoreDestroyed = false;
+	FTimerHandle AttackTimerHandle;
+
+	// One attack damages the closest living enemy inside the Core's range.
+	void AttackNearestEnemy();
 };
