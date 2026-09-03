@@ -5,6 +5,7 @@
 #include "NightlightDreamCore.generated.h"
 
 class USceneComponent;
+class UStaticMeshComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FNightlightCoreHealthChangedSignature,
@@ -45,6 +46,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> SceneRoot;
+
+	// Assign the Core's visual mesh in BP_DreamCore.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UStaticMeshComponent> CoreMesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Dream Core", meta = (ClampMin = "0.0"))
 	float MaxHealth = 100.0f;

@@ -146,6 +146,7 @@ void ANightlightEnemy::Die()
 	// Stop movement before the event because a dead enemy must never reach the Core.
 	bIsDead = true;
 	SetActorTickEnabled(false);
+	AwardDeathTokens(TokensOnDeath);
 	OnEnemyDied.Broadcast();
 	Destroy();
 }

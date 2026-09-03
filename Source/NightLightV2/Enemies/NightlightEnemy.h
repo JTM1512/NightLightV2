@@ -51,6 +51,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy")
 	FNightlightEnemyDiedSignature OnEnemyDied;
 
+	// The enemy triggers the reward, while its Blueprint passes the tokens to the existing Game State pool.
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Nightlight|Enemy|Rewards")
+	void AwardDeathTokens(int32 TokenAmount);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -72,6 +76,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float CoreDamage = 10.0f;
+
+	// Each enemy controls its own reward while the Game State remains responsible for the player's token pool.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Enemy|Rewards", meta = (ClampMin = "0"))
+	int32 TokensOnDeath = 10;
 
 	// The route is copied so the enemy does not need to keep checking the generator.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")

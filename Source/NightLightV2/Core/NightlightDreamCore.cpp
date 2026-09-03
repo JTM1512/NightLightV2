@@ -1,5 +1,6 @@
 #include "NightlightDreamCore.h"
 #include "Components/SceneComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 ANightlightDreamCore::ANightlightDreamCore()
 {
@@ -7,6 +8,9 @@ ANightlightDreamCore::ANightlightDreamCore()
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
+
+	CoreMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CoreMesh"));
+	CoreMesh->SetupAttachment(SceneRoot);
 }
 
 void ANightlightDreamCore::BeginPlay()
