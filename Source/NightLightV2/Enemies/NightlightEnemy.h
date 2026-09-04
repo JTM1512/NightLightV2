@@ -13,6 +13,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	float, CurrentHealth,
 	float, MaxHealth);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNightlightEnemyDiedSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FNightlightEnemyDamagedSignature,
+	float, DamageAmount);
 
 // An enemy follows one generated route from its Rift to the Dream Core.
 UCLASS(Blueprintable)
@@ -24,6 +27,11 @@ public:
 	ANightlightEnemy();
 
 	virtual void Tick(float DeltaTime) override;
+	virtual float TakeDamage(
+		float DamageAmount,
+		struct FDamageEvent const& DamageEvent,
+		class AController* EventInstigator,
+		AActor* DamageCauser) override;
 
 	// Copies the route, places the enemy at the Rift and starts its movement.
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy")
@@ -51,6 +59,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy")
 	FNightlightEnemyDiedSignature OnEnemyDied;
+
+	// The Blueprint health bar uses this to show the amount taken by the latest hit.
+	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy")
+	FNightlightEnemyDamagedSignature OnDamageTaken;
 
 	// The enemy triggers the reward, while its Blueprint passes the tokens to the existing Game State pool.
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Nightlight|Enemy|Rewards")

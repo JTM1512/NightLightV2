@@ -39,6 +39,17 @@ void ANightlightEnemy::Tick(const float DeltaTime)
 	MoveAlongRoute(DeltaTime);
 }
 
+float ANightlightEnemy::TakeDamage(
+	const float DamageAmount,
+	const FDamageEvent& DamageEvent,
+	AController* const EventInstigator,
+	AActor* const DamageCauser)
+{
+	const float AppliedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	ApplyDamage(AppliedDamage);
+	return AppliedDamage;
+}
+
 void ANightlightEnemy::AssignRoute(const TArray<FVector>& RoutePoints)
 {
 	AssignedRoutePoints = RoutePoints;
@@ -75,8 +86,10 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 	}
 
 	// A strong attack can reach zero, but health must never become negative.
+	const float PreviousHealth = CurrentHealth;
 	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	OnDamageTaken.Broadcast(PreviousHealth - CurrentHealth);
 
 	if (CurrentHealth > 0.0f)
 	{
