@@ -47,7 +47,11 @@ protected:
 	TSubclassOf<ANightlightEnemy> EnemyClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning", meta = (ClampMin = "0.1"))
-	float SpawnInterval = 2.0f;
+	float SpawnInterval = 3.0f;
+
+	// Give the player time to inspect the generated map and place their first defenders.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning", meta = (ClampMin = "0.0"))
+	float InitialSpawnDelay = 12.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning")
 	bool bSpawnOnBeginPlay = true;

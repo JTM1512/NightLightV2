@@ -1,7 +1,130 @@
 #include "NightlightEnemy.h"
 #include "../Core/NightlightDreamCore.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/ProgressBar.h"
 #include "Components/SceneComponent.h"
+#include "Components/TextBlock.h"
+#include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "UObject/UnrealType.h"
+
+namespace
+{
+	UUserWidget* GetWorldHealthWidget(AActor* const Actor)
+	{
+		if (!IsValid(Actor))
+		{
+			return nullptr;
+		}
+
+		UWidgetComponent* const WidgetComponent = Actor->FindComponentByClass<UWidgetComponent>();
+		if (!WidgetComponent)
+		{
+			return nullptr;
+		}
+
+		WidgetComponent->InitWidget();
+		return WidgetComponent->GetUserWidgetObject();
+	}
+
+	void UpdateWorldHealthWidget(
+		AActor* const Actor,
+		const double CurrentHealth,
+		const double MaxHealth,
+		const double DamageTaken = 0.0)
+	{
+		UUserWidget* const HealthWidget = GetWorldHealthWidget(Actor);
+		if (!HealthWidget)
+		{
+			return;
+		}
+
+		if (UProgressBar* const HealthBar = Cast<UProgressBar>(HealthWidget->GetWidgetFromName(TEXT("HealthBar"))))
+		{
+			const float HealthPercent = MaxHealth > 0.0
+				? static_cast<float>(FMath::Clamp(CurrentHealth / MaxHealth, 0.0, 1.0))
+				: 0.0f;
+			HealthBar->SetPercent(HealthPercent);
+		}
+
+		if (UTextBlock* const HealthText = Cast<UTextBlock>(HealthWidget->GetWidgetFromName(TEXT("HealthText"))))
+		{
+			HealthText->SetText(FText::Format(
+				NSLOCTEXT("Nightlight", "WorldHealthFormat", "{0} / {1}"),
+				FText::AsNumber(FMath::RoundToInt(CurrentHealth)),
+				FText::AsNumber(FMath::RoundToInt(MaxHealth))));
+		}
+
+		if (DamageTaken > 0.0)
+		{
+			if (UTextBlock* const DamageText = Cast<UTextBlock>(HealthWidget->GetWidgetFromName(TEXT("DamageText"))))
+			{
+				DamageText->SetText(FText::AsNumber(-FMath::RoundToInt(DamageTaken)));
+				DamageText->SetVisibility(ESlateVisibility::Visible);
+			}
+		}
+	}
+
+	bool ReadNumericProperty(const AActor* const Actor, const FName PropertyName, double& OutValue)
+	{
+		const FNumericProperty* const Property = FindFProperty<FNumericProperty>(Actor->GetClass(), PropertyName);
+		if (!Property)
+		{
+			return false;
+		}
+
+		const void* const ValueAddress = Property->ContainerPtrToValuePtr<void>(Actor);
+		OutValue = Property->IsFloatingPoint()
+			? Property->GetFloatingPointPropertyValue(ValueAddress)
+			: static_cast<double>(Property->GetSignedIntPropertyValue(ValueAddress));
+		return true;
+	}
+
+	bool WriteNumericProperty(AActor* const Actor, const FName PropertyName, const double Value)
+	{
+		FNumericProperty* const Property = FindFProperty<FNumericProperty>(Actor->GetClass(), PropertyName);
+		if (!Property)
+		{
+			return false;
+		}
+
+		void* const ValueAddress = Property->ContainerPtrToValuePtr<void>(Actor);
+		if (Property->IsFloatingPoint())
+		{
+			Property->SetFloatingPointPropertyValue(ValueAddress, Value);
+		}
+		else
+		{
+			Property->SetIntPropertyValue(ValueAddress, FMath::RoundToInt64(Value));
+		}
+		return true;
+	}
+
+	bool ApplyDamageToBlueprintDefender(AActor* const Defender, const double DamageAmount)
+	{
+		double CurrentHealth = 0.0;
+		double MaxHealth = 0.0;
+		if (!ReadNumericProperty(Defender, TEXT("CurrentHealth"), CurrentHealth)
+			|| !ReadNumericProperty(Defender, TEXT("MaxHealth"), MaxHealth))
+		{
+			return false;
+		}
+
+		const double AppliedDamage = FMath::Min(FMath::Max(DamageAmount, 0.0), FMath::Max(CurrentHealth, 0.0));
+		const double NewHealth = FMath::Clamp(CurrentHealth - AppliedDamage, 0.0, FMath::Max(MaxHealth, 0.0));
+		if (!WriteNumericProperty(Defender, TEXT("CurrentHealth"), NewHealth))
+		{
+			return false;
+		}
+
+		UpdateWorldHealthWidget(Defender, NewHealth, MaxHealth, AppliedDamage);
+		if (NewHealth <= 0.0)
+		{
+			Defender->Destroy();
+		}
+		return true;
+	}
+}
 
 ANightlightEnemy::ANightlightEnemy()
 {
@@ -21,6 +144,7 @@ void ANightlightEnemy::BeginPlay()
 	CurrentHealth = MaxHealth;
 	bIsDead = false;
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
 
 	if (CurrentHealth <= 0.0f)
 	{
@@ -89,7 +213,9 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 	const float PreviousHealth = CurrentHealth;
 	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
-	OnDamageTaken.Broadcast(PreviousHealth - CurrentHealth);
+	const float AppliedDamage = PreviousHealth - CurrentHealth;
+	OnDamageTaken.Broadcast(AppliedDamage);
+	UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth, AppliedDamage);
 
 	if (CurrentHealth > 0.0f)
 	{
@@ -210,13 +336,17 @@ void ANightlightEnemy::AttackTargetDefender()
 		return;
 	}
 
-	// BP_Defender already handles Unreal's standard damage event and its own death.
-	UGameplayStatics::ApplyDamage(
-		TargetDefender,
-		FMath::Max(DefenderAttackDamage, 0.0f),
-		nullptr,
-		this,
-		nullptr);
+	const float AppliedDamage = FMath::Max(DefenderAttackDamage, 0.0f);
+	if (!ApplyDamageToBlueprintDefender(TargetDefender, AppliedDamage))
+	{
+		// Keep Unreal's standard damage path as a fallback for any future defender class.
+		UGameplayStatics::ApplyDamage(TargetDefender, AppliedDamage, nullptr, this, nullptr);
+	}
+
+	if (!IsValid(TargetDefender))
+	{
+		ClearDefenderTarget();
+	}
 }
 
 void ANightlightEnemy::ClearDefenderTarget()

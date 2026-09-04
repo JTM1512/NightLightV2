@@ -19,10 +19,23 @@ void ANightlightEnemySpawner::BeginPlay()
 
 	if (bSpawnOnBeginPlay)
 	{
-		// Wait one tick so the generator can finish creating its routes first.
-		GetWorldTimerManager().SetTimerForNextTick(
-			this,
-			&ANightlightEnemySpawner::StartSpawning);
+		if (InitialSpawnDelay > 0.0f)
+		{
+			// The setup window starts after generation, giving the player time to read the map and place defenders.
+			GetWorldTimerManager().SetTimer(
+				SpawnTimerHandle,
+				this,
+				&ANightlightEnemySpawner::StartSpawning,
+				InitialSpawnDelay,
+				false);
+		}
+		else
+		{
+			// Still wait one tick so the generator can finish creating its routes first.
+			GetWorldTimerManager().SetTimerForNextTick(
+				this,
+				&ANightlightEnemySpawner::StartSpawning);
+		}
 	}
 }
 
