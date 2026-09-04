@@ -62,7 +62,7 @@ protected:
 	float AttackRange = 1000.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Dream Core|Attack", meta = (ClampMin = "0.0"))
-	float AttackDamage = 20.0f;
+	float AttackDamage = 35.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Dream Core|Attack", meta = (ClampMin = "0.1"))
 	float AttackInterval = 1.0f;

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TimerManager.h"
 #include "NightlightEnemy.generated.h"
 
 class USceneComponent;
@@ -77,6 +78,19 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float CoreDamage = 10.0f;
 
+	// Assign BP_Defender so the enemy only reacts to the teammate's defender type.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack")
+	TSubclassOf<AActor> DefenderClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack", meta = (ClampMin = "0.0"))
+	float DefenderAttackRange = 400.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack", meta = (ClampMin = "0.0"))
+	float DefenderAttackDamage = 10.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack", meta = (ClampMin = "0.1"))
+	float DefenderAttackInterval = 1.0f;
+
 	// Each enemy controls its own reward while the Game State remains responsible for the player's token pool.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Enemy|Rewards", meta = (ClampMin = "0"))
 	int32 TokensOnDeath = 10;
@@ -102,7 +116,17 @@ private:
 	UPROPERTY()
 	TObjectPtr<ANightlightDreamCore> DreamCore;
 
+	UPROPERTY()
+	TObjectPtr<AActor> TargetDefender;
+
+	FTimerHandle DefenderAttackTimerHandle;
+	float TimeUntilDefenderSearch = 0.0f;
+
 	void MoveAlongRoute(float DeltaTime);
+	bool UpdateDefenderCombat(float DeltaTime);
+	void FindDefenderTarget();
+	void AttackTargetDefender();
+	void ClearDefenderTarget();
 	void ReachNextWaypoint();
 	void HandleCoreReached();
 	void Die();

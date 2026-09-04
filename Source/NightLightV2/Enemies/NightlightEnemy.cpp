@@ -1,6 +1,7 @@
 #include "NightlightEnemy.h"
 #include "../Core/NightlightDreamCore.h"
 #include "Components/SceneComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 ANightlightEnemy::ANightlightEnemy()
 {
@@ -30,6 +31,11 @@ void ANightlightEnemy::BeginPlay()
 void ANightlightEnemy::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (UpdateDefenderCombat(DeltaTime))
+	{
+		return;
+	}
+
 	MoveAlongRoute(DeltaTime);
 }
 
@@ -107,6 +113,105 @@ void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 	}
 }
 
+bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
+{
+	if (bIsDead || bHasReachedCore || !DefenderClass)
+	{
+		ClearDefenderTarget();
+		return false;
+	}
+
+	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
+	if (IsValid(TargetDefender))
+	{
+		if (FVector::DistSquared(GetActorLocation(), TargetDefender->GetActorLocation()) <= AttackRangeSquared)
+		{
+			return true;
+		}
+
+		ClearDefenderTarget();
+	}
+
+	TimeUntilDefenderSearch -= DeltaTime;
+	if (TimeUntilDefenderSearch > 0.0f)
+	{
+		return false;
+	}
+
+	// A short search delay keeps this simple without scanning every defender every frame.
+	TimeUntilDefenderSearch = 0.25f;
+	FindDefenderTarget();
+	return IsValid(TargetDefender);
+}
+
+void ANightlightEnemy::FindDefenderTarget()
+{
+	TArray<AActor*> Defenders;
+	UGameplayStatics::GetAllActorsOfClass(this, DefenderClass, Defenders);
+
+	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
+	float ClosestDistanceSquared = AttackRangeSquared;
+
+	for (AActor* Defender : Defenders)
+	{
+		if (!IsValid(Defender))
+		{
+			continue;
+		}
+
+		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
+		if (DistanceSquared <= ClosestDistanceSquared)
+		{
+			TargetDefender = Defender;
+			ClosestDistanceSquared = DistanceSquared;
+		}
+	}
+
+	if (!TargetDefender)
+	{
+		return;
+	}
+
+	// Damage starts immediately, then repeats while the same defender remains in range.
+	AttackTargetDefender();
+	GetWorldTimerManager().SetTimer(
+		DefenderAttackTimerHandle,
+		this,
+		&ANightlightEnemy::AttackTargetDefender,
+		FMath::Max(DefenderAttackInterval, 0.1f),
+		true);
+}
+
+void ANightlightEnemy::AttackTargetDefender()
+{
+	if (bIsDead || bHasReachedCore || !IsValid(TargetDefender))
+	{
+		ClearDefenderTarget();
+		return;
+	}
+
+	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
+	if (FVector::DistSquared(GetActorLocation(), TargetDefender->GetActorLocation()) > AttackRangeSquared)
+	{
+		ClearDefenderTarget();
+		return;
+	}
+
+	// BP_Defender already handles Unreal's standard damage event and its own death.
+	UGameplayStatics::ApplyDamage(
+		TargetDefender,
+		FMath::Max(DefenderAttackDamage, 0.0f),
+		nullptr,
+		this,
+		nullptr);
+}
+
+void ANightlightEnemy::ClearDefenderTarget()
+{
+	GetWorldTimerManager().ClearTimer(DefenderAttackTimerHandle);
+	TargetDefender = nullptr;
+}
+
 void ANightlightEnemy::ReachNextWaypoint()
 {
 	++CurrentWaypointIndex;
@@ -126,6 +231,7 @@ void ANightlightEnemy::HandleCoreReached()
 	// Set this before the damage and event so another Tick cannot repeat the arrival.
 	bHasReachedCore = true;
 	SetActorTickEnabled(false);
+	ClearDefenderTarget();
 
 	if (IsValid(DreamCore) && !DreamCore->IsCoreDestroyed())
 	{
@@ -146,6 +252,7 @@ void ANightlightEnemy::Die()
 	// Stop movement before the event because a dead enemy must never reach the Core.
 	bIsDead = true;
 	SetActorTickEnabled(false);
+	ClearDefenderTarget();
 	AwardDeathTokens(TokensOnDeath);
 	OnEnemyDied.Broadcast();
 	Destroy();

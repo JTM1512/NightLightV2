@@ -19,6 +19,7 @@ bool FNightlightRouteGenerationTest::RunTest(const FString& Parameters)
 	const FNightlightGenerationSettings OriginalSettings = Generator->GenerationSettings;
 	const TArray<FNightlightCellData> OriginalCells = Generator->Cells;
 	const TArray<FNightlightRouteData> OriginalRoutes = Generator->Routes;
+	const TArray<FIntPoint> OriginalAnchorCoordinates = Generator->AnchorCoordinates;
 	const int32 OriginalActiveSeed = Generator->ActiveSeed;
 
 	// Start with the documented Part 1 baseline and a controlled seed.
@@ -35,6 +36,22 @@ bool FNightlightRouteGenerationTest::RunTest(const FString& Parameters)
 	TestTrue(
 		TEXT("Routes pass connectivity, role and overlap validation"),
 		Generator->ValidateGeneratedRoutes(CoreCoordinate, 31, 31));
+	TestEqual(
+		TEXT("Every approved anchor has a terrain-aligned world position"),
+		Generator->GetAnchorWorldLocations().Num(),
+		Generator->GetAnchorCoordinates().Num());
+
+	bool bAnchorsStayOffRoutes = true;
+	for (const FIntPoint& Anchor : Generator->GetAnchorCoordinates())
+	{
+		const FNightlightCellData& Cell = Generator->Cells[Generator->GetCellIndex(Anchor.X, Anchor.Y, 31)];
+		if (Cell.Type != ENightlightCellType::PlacementAnchor || !Cell.bBuildable)
+		{
+			bAnchorsStayOffRoutes = false;
+			break;
+		}
+	}
+	TestTrue(TEXT("Approved anchors remain buildable and cannot be path cells"), bAnchorsStayOffRoutes);
 
 	// Keep the ordered routes, generate them again and compare the public contract.
 	const TArray<FNightlightRouteData> FirstRoutes = Generator->GetRoutes();
@@ -68,6 +85,7 @@ bool FNightlightRouteGenerationTest::RunTest(const FString& Parameters)
 	Generator->GenerationSettings = OriginalSettings;
 	Generator->Cells = OriginalCells;
 	Generator->Routes = OriginalRoutes;
+	Generator->AnchorCoordinates = OriginalAnchorCoordinates;
 	Generator->ActiveSeed = OriginalActiveSeed;
 	return true;
 }
