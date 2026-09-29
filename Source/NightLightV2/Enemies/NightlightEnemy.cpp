@@ -34,7 +34,7 @@ void ANightlightEnemy::BeginPlay()
 void ANightlightEnemy::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (UpdateDefenderCombat(DeltaTime))
+	if (UpdateDefenderCombat(DeltaTime) && ShouldStopForDefender())
 	{
 		return;
 	}
@@ -163,17 +163,38 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 
 	// A short search delay keeps this simple without scanning every defender every frame.
 	TimeUntilDefenderSearch = 0.25f;
-	FindDefenderTarget();
-	return IsValid(TargetDefender);
+	TargetDefender = FindDefenderTarget();
+	if (!IsValid(TargetDefender))
+	{
+		TargetDefender = nullptr;
+		return false;
+	}
+
+	// Damage starts immediately, then repeats while the same defender remains in range
+	// (Epic Games, Inc., 2026b).
+	AttackTargetDefender();
+	if (!IsValid(TargetDefender))
+	{
+		return false;
+	}
+
+	GetWorldTimerManager().SetTimer(
+		DefenderAttackTimerHandle,
+		this,
+		&ANightlightEnemy::AttackTargetDefender,
+		FMath::Max(DefenderAttackInterval, 0.1f),
+		true);
+	return true;
 }
 
-void ANightlightEnemy::FindDefenderTarget()
+ANightlightDefender* ANightlightEnemy::FindDefenderTarget()
 {
 	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
 	float ClosestDistanceSquared = AttackRangeSquared;
+	ANightlightDefender* ClosestDefender = nullptr;
 
 	// Every defender type shares the base class, so one search finds them all
-	// (Epic Games, Inc., 2026b).
+	// (Epic Games, Inc., 2026c).
 	TArray<AActor*> Defenders;
 	UGameplayStatics::GetAllActorsOfClass(this, ANightlightDefender::StaticClass(), Defenders);
 
@@ -188,24 +209,12 @@ void ANightlightEnemy::FindDefenderTarget()
 		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
 		if (DistanceSquared <= ClosestDistanceSquared)
 		{
-			TargetDefender = Defender;
+			ClosestDefender = Defender;
 			ClosestDistanceSquared = DistanceSquared;
 		}
 	}
 
-	if (!TargetDefender)
-	{
-		return;
-	}
-
-	// Damage starts immediately, then repeats while the same defender remains in range.
-	AttackTargetDefender();
-	GetWorldTimerManager().SetTimer(
-		DefenderAttackTimerHandle,
-		this,
-		&ANightlightEnemy::AttackTargetDefender,
-		FMath::Max(DefenderAttackInterval, 0.1f),
-		true);
+	return ClosestDefender;
 }
 
 void ANightlightEnemy::AttackTargetDefender()
@@ -223,11 +232,24 @@ void ANightlightEnemy::AttackTargetDefender()
 		return;
 	}
 
-	TargetDefender->ApplyDamage(FMath::Max(DefenderAttackDamage, 0.0f));
+	AttackDefender(TargetDefender);
 	if (!IsValid(TargetDefender) || TargetDefender->IsDead())
 	{
 		ClearDefenderTarget();
 	}
+}
+
+void ANightlightEnemy::AttackDefender(ANightlightDefender* const Defender)
+{
+	if (IsValid(Defender))
+	{
+		Defender->ApplyDamage(FMath::Max(DefenderAttackDamage, 0.0f));
+	}
+}
+
+bool ANightlightEnemy::ShouldStopForDefender() const
+{
+	return true;
 }
 
 void ANightlightEnemy::ClearDefenderTarget()
@@ -289,7 +311,11 @@ Epic Games, Inc., 2026a. FMath::VInterpConstantTo. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/VInterpConstantTo>
 [Accessed 31 August 2026].
 
-Epic Games, Inc., 2026b. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+Epic Games, Inc., 2026b. Gameplay Timers in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026c. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 */

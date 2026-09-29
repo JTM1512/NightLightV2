@@ -121,6 +121,23 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy", meta = (DisplayName = "On Core Reached"))
 	void OnCoreReached();
 
+	// New enemy types override only the steps that differ. The search delay and attack timer stay in this class.
+	virtual void MoveAlongRoute(float DeltaTime);
+
+	// Returns the closest living defender in range, or null when there is none.
+	virtual ANightlightDefender* FindDefenderTarget();
+
+	// A single hit. It runs as soon as a target is found, then on every attack interval.
+	virtual void AttackDefender(ANightlightDefender* Defender);
+
+	// Walkers stop to fight. A type that returns false keeps moving while it attacks.
+	virtual bool ShouldStopForDefender() const;
+
+	// Damages the Core once, then removes the enemy.
+	virtual void HandleCoreReached();
+
+	virtual void Die();
+
 private:
 	UPROPERTY()
 	TObjectPtr<ANightlightDreamCore> DreamCore;
@@ -131,12 +148,8 @@ private:
 	FTimerHandle DefenderAttackTimerHandle;
 	float TimeUntilDefenderSearch = 0.0f;
 
-	void MoveAlongRoute(float DeltaTime);
 	bool UpdateDefenderCombat(float DeltaTime);
-	void FindDefenderTarget();
 	void AttackTargetDefender();
 	void ClearDefenderTarget();
 	void ReachNextWaypoint();
-	void HandleCoreReached();
-	void Die();
 };
