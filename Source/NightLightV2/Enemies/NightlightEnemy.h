@@ -121,6 +121,10 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy", meta = (DisplayName = "On Core Reached"))
 	void OnCoreReached();
 
+	// Lets the enemy Blueprint play an animation or effect on each hit against a defender.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy|Defender Attack", meta = (DisplayName = "On Attack Defender"))
+	void OnAttackDefender(ANightlightDefender* Defender);
+
 	// New enemy types override only the steps that differ. The search delay and attack timer stay in this class.
 	virtual void MoveAlongRoute(float DeltaTime);
 

@@ -194,7 +194,7 @@ ANightlightDefender* ANightlightEnemy::FindDefenderTarget()
 	ANightlightDefender* ClosestDefender = nullptr;
 
 	// Every defender type shares the base class, so one search finds them all
-	// (Epic Games, Inc., 2026c).
+	// (Epic Games, Inc., 2026d).
 	TArray<AActor*> Defenders;
 	UGameplayStatics::GetAllActorsOfClass(this, ANightlightDefender::StaticClass(), Defenders);
 
@@ -232,6 +232,9 @@ void ANightlightEnemy::AttackTargetDefender()
 		return;
 	}
 
+	// The event fires before the hit so the Blueprint still has a valid defender if this hit
+	// destroys it. Blueprints implement it without any C++ body (Epic Games, Inc., 2026c).
+	OnAttackDefender(TargetDefender);
 	AttackDefender(TargetDefender);
 	if (!IsValid(TargetDefender) || TargetDefender->IsDead())
 	{
@@ -315,7 +318,11 @@ Epic Games, Inc., 2026b. Gameplay Timers in Unreal Engine. [online] Available at
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026c. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+Epic Games, Inc., 2026c. UFunctions in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026d. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 */
