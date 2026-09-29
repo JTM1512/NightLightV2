@@ -47,6 +47,8 @@ void ANightlightDefenderPlacementSpawner::SpawnPlacementAnchors()
 	const TArray<FVector> AnchorLocations = WorldGenerator->GetAnchorWorldLocations();
 	for (const FVector& AnchorLocation : AnchorLocations)
 	{
+		// AlwaysSpawn keeps every approved anchor even when it touches the terrain
+		// collision (Epic Games, Inc., 2026).
 		FActorSpawnParameters SpawnParameters;
 		SpawnParameters.Owner = this;
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -74,7 +76,7 @@ void ANightlightDefenderPlacementSpawner::SpawnPlacementAnchors()
 /*
 References
 
-Epic Games, Inc., 2026a. UWorld::SpawnActor. [online] Available at:
+Epic Games, Inc., 2026. UWorld::SpawnActor. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UWorld/SpawnActor>
 [Accessed 4 September 2026].
 */

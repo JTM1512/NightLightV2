@@ -121,6 +121,8 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 		return;
 	}
 
+	// AlwaysSpawn places the enemy on its Rift even when it overlaps the terrain
+	// (Epic Games, Inc., 2026).
 	FActorSpawnParameters SpawnParameters;
 	SpawnParameters.Owner = this;
 	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -145,7 +147,7 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 /*
 References
 
-Epic Games, Inc., 2026a. UWorld::SpawnActor. [online] Available at:
+Epic Games, Inc., 2026. UWorld::SpawnActor. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UWorld/SpawnActor>
 [Accessed 31 August 2026].
 */

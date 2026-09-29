@@ -241,7 +241,7 @@ void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 		FMath::Max(MovementSpeed, 0.0f));
 
 	// VInterpConstantTo stops at the target instead of moving past the waypoint
-	// (Epic Games, Inc., 2026a).
+	// (Epic Games, Inc., 2026).
 	SetActorLocation(NewLocation);
 
 	const float AcceptanceDistance = FMath::Max(WaypointAcceptanceDistance, 0.0f);
@@ -404,7 +404,7 @@ void ANightlightEnemy::Die()
 /*
 References
 
-Epic Games, Inc., 2026a. FMath::VInterpConstantTo. [online] Available at:
+Epic Games, Inc., 2026. FMath::VInterpConstantTo. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/VInterpConstantTo>
 [Accessed 31 August 2026].
 */
