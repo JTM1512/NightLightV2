@@ -3,7 +3,6 @@
 #include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
-#include "Kismet/GameplayStatics.h"
 
 ANightlightDefender::ANightlightDefender()
 {
@@ -104,31 +103,10 @@ void ANightlightDefender::ApplyDamage(const float DamageAmount)
 
 ANightlightEnemy* ANightlightDefender::FindTarget_Implementation()
 {
-	// The default target is the closest living enemy inside the attack range, found the same way as
-	// the Dream Core finds its targets (Epic Games, Inc., 2026f).
-	TArray<AActor*> FoundEnemies;
-	UGameplayStatics::GetAllActorsOfClass(this, ANightlightEnemy::StaticClass(), FoundEnemies);
-
-	ANightlightEnemy* ClosestEnemy = nullptr;
-	float ClosestDistanceSquared = FMath::Square(FMath::Max(AttackRange, 0.0f));
-
-	for (AActor* FoundActor : FoundEnemies)
-	{
-		ANightlightEnemy* Enemy = Cast<ANightlightEnemy>(FoundActor);
-		if (!IsValid(Enemy) || Enemy->IsDead())
-		{
-			continue;
-		}
-
-		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Enemy->GetActorLocation());
-		if (DistanceSquared <= ClosestDistanceSquared)
-		{
-			ClosestEnemy = Enemy;
-			ClosestDistanceSquared = DistanceSquared;
-		}
-	}
-
-	return ClosestEnemy;
+	// The default target is the closest living enemy inside the attack range. The registry replaces a
+	// GetAllActorsOfClass search, which is slow when there are many actors (Epic Games, Inc., 2026f).
+	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
+	return Registry ? Registry->FindClosestEnemy(GetActorLocation(), AttackRange) : nullptr;
 }
 
 void ANightlightDefender::PerformAttack_Implementation(ANightlightEnemy* const Target)

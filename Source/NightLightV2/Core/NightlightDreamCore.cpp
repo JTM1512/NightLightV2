@@ -1,8 +1,8 @@
 #include "NightlightDreamCore.h"
 #include "../Enemies/NightlightEnemy.h"
+#include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Kismet/GameplayStatics.h"
 
 ANightlightDreamCore::ANightlightDreamCore()
 {
@@ -32,7 +32,8 @@ void ANightlightDreamCore::BeginPlay()
 		return;
 	}
 
-	// The Core attacks on a timer so it does not search for enemies every frame.
+	// The Core attacks on a timer so it does not search for enemies every frame
+	// (Epic Games, Inc., 2026a).
 	GetWorldTimerManager().SetTimer(
 		AttackTimerHandle,
 		this,
@@ -68,30 +69,24 @@ void ANightlightDreamCore::AttackNearestEnemy()
 		return;
 	}
 
-	TArray<AActor*> FoundEnemies;
-	UGameplayStatics::GetAllActorsOfClass(this, ANightlightEnemy::StaticClass(), FoundEnemies);
-
-	ANightlightEnemy* ClosestEnemy = nullptr;
-	float ClosestDistanceSquared = FMath::Square(AttackRange);
-
-	for (AActor* FoundActor : FoundEnemies)
-	{
-		ANightlightEnemy* Enemy = Cast<ANightlightEnemy>(FoundActor);
-		if (!IsValid(Enemy) || Enemy->IsDead())
-		{
-			continue;
-		}
-
-		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Enemy->GetActorLocation());
-		if (DistanceSquared <= ClosestDistanceSquared)
-		{
-			ClosestEnemy = Enemy;
-			ClosestDistanceSquared = DistanceSquared;
-		}
-	}
-
+	// Every enemy registers itself, so the registry replaces a GetAllActorsOfClass search, which is
+	// slow when there are many actors (Epic Games, Inc., 2026b). Dead enemies are skipped.
+	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
+	ANightlightEnemy* const ClosestEnemy = Registry ? Registry->FindClosestEnemy(GetActorLocation(), AttackRange) : nullptr;
 	if (ClosestEnemy)
 	{
 		ClosestEnemy->ApplyDamage(AttackDamage);
 	}
 }
+
+/*
+References
+
+Epic Games, Inc., 2026a. Gameplay Timers in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026b. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
+[Accessed 29 September 2026].
+*/

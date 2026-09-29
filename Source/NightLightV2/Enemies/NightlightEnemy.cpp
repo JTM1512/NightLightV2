@@ -4,7 +4,6 @@
 #include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
-#include "Kismet/GameplayStatics.h"
 
 ANightlightEnemy::ANightlightEnemy()
 {
@@ -211,32 +210,10 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 
 ANightlightDefender* ANightlightEnemy::FindDefenderTarget()
 {
-	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
-	float ClosestDistanceSquared = AttackRangeSquared;
-	ANightlightDefender* ClosestDefender = nullptr;
-
-	// Every defender type shares the base class, so one search finds them all
-	// (Epic Games, Inc., 2026d).
-	TArray<AActor*> Defenders;
-	UGameplayStatics::GetAllActorsOfClass(this, ANightlightDefender::StaticClass(), Defenders);
-
-	for (AActor* FoundActor : Defenders)
-	{
-		ANightlightDefender* const Defender = Cast<ANightlightDefender>(FoundActor);
-		if (!IsValid(Defender) || Defender->IsDead())
-		{
-			continue;
-		}
-
-		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
-		if (DistanceSquared <= ClosestDistanceSquared)
-		{
-			ClosestDefender = Defender;
-			ClosestDistanceSquared = DistanceSquared;
-		}
-	}
-
-	return ClosestDefender;
+	// Every defender type registers itself, so the registry replaces a GetAllActorsOfClass search,
+	// which is slow when there are many actors (Epic Games, Inc., 2026d). Dead defenders are skipped.
+	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
+	return Registry ? Registry->FindClosestDefender(GetActorLocation(), DefenderAttackRange) : nullptr;
 }
 
 void ANightlightEnemy::AttackTargetDefender()
