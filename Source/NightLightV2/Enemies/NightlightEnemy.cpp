@@ -4,71 +4,6 @@
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "UObject/UnrealType.h"
-
-namespace
-{
-	bool ReadNumericProperty(const AActor* const Actor, const FName PropertyName, double& OutValue)
-	{
-		const FNumericProperty* const Property = FindFProperty<FNumericProperty>(Actor->GetClass(), PropertyName);
-		if (!Property)
-		{
-			return false;
-		}
-
-		const void* const ValueAddress = Property->ContainerPtrToValuePtr<void>(Actor);
-		OutValue = Property->IsFloatingPoint()
-			? Property->GetFloatingPointPropertyValue(ValueAddress)
-			: static_cast<double>(Property->GetSignedIntPropertyValue(ValueAddress));
-		return true;
-	}
-
-	bool WriteNumericProperty(AActor* const Actor, const FName PropertyName, const double Value)
-	{
-		FNumericProperty* const Property = FindFProperty<FNumericProperty>(Actor->GetClass(), PropertyName);
-		if (!Property)
-		{
-			return false;
-		}
-
-		void* const ValueAddress = Property->ContainerPtrToValuePtr<void>(Actor);
-		if (Property->IsFloatingPoint())
-		{
-			Property->SetFloatingPointPropertyValue(ValueAddress, Value);
-		}
-		else
-		{
-			Property->SetIntPropertyValue(ValueAddress, FMath::RoundToInt64(Value));
-		}
-		return true;
-	}
-
-	// Fallback for BP_Defender until it is reparented onto ANightlightDefender. Remove this once it is.
-	bool ApplyDamageToBlueprintDefender(AActor* const Defender, const double DamageAmount)
-	{
-		double CurrentHealth = 0.0;
-		double MaxHealth = 0.0;
-		if (!ReadNumericProperty(Defender, TEXT("CurrentHealth"), CurrentHealth)
-			|| !ReadNumericProperty(Defender, TEXT("MaxHealth"), MaxHealth))
-		{
-			return false;
-		}
-
-		const double AppliedDamage = FMath::Min(FMath::Max(DamageAmount, 0.0), FMath::Max(CurrentHealth, 0.0));
-		const double NewHealth = FMath::Clamp(CurrentHealth - AppliedDamage, 0.0, FMath::Max(MaxHealth, 0.0));
-		if (!WriteNumericProperty(Defender, TEXT("CurrentHealth"), NewHealth))
-		{
-			return false;
-		}
-
-		NightlightHealthWidgetUtils::UpdateWorldHealthWidget(Defender, NewHealth, MaxHealth, AppliedDamage);
-		if (NewHealth <= 0.0)
-		{
-			Defender->Destroy();
-		}
-		return true;
-	}
-}
 
 ANightlightEnemy::ANightlightEnemy()
 {
@@ -204,8 +139,7 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 		return false;
 	}
 
-	const ANightlightDefender* const BaseDefender = Cast<ANightlightDefender>(TargetDefender);
-	if (BaseDefender && BaseDefender->IsDead())
+	if (IsValid(TargetDefender) && TargetDefender->IsDead())
 	{
 		ClearDefenderTarget();
 	}
@@ -245,7 +179,7 @@ void ANightlightEnemy::FindDefenderTarget()
 
 	for (AActor* FoundActor : Defenders)
 	{
-		const ANightlightDefender* const Defender = Cast<ANightlightDefender>(FoundActor);
+		ANightlightDefender* const Defender = Cast<ANightlightDefender>(FoundActor);
 		if (!IsValid(Defender) || Defender->IsDead())
 		{
 			continue;
@@ -254,32 +188,8 @@ void ANightlightEnemy::FindDefenderTarget()
 		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
 		if (DistanceSquared <= ClosestDistanceSquared)
 		{
-			TargetDefender = FoundActor;
+			TargetDefender = Defender;
 			ClosestDistanceSquared = DistanceSquared;
-		}
-	}
-
-	// Fallback for BP_Defender until it is reparented onto ANightlightDefender. Remove this search,
-	// DefenderClass and ApplyDamageToBlueprintDefender once it is.
-	if (!TargetDefender && DefenderClass)
-	{
-		Defenders.Reset();
-		UGameplayStatics::GetAllActorsOfClass(this, DefenderClass, Defenders);
-
-		for (AActor* Defender : Defenders)
-		{
-			// Base class defenders were already checked above.
-			if (!IsValid(Defender) || Defender->IsA<ANightlightDefender>())
-			{
-				continue;
-			}
-
-			const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
-			if (DistanceSquared <= ClosestDistanceSquared)
-			{
-				TargetDefender = Defender;
-				ClosestDistanceSquared = DistanceSquared;
-			}
 		}
 	}
 
@@ -313,20 +223,8 @@ void ANightlightEnemy::AttackTargetDefender()
 		return;
 	}
 
-	const float AppliedDamage = FMath::Max(DefenderAttackDamage, 0.0f);
-	if (ANightlightDefender* const Defender = Cast<ANightlightDefender>(TargetDefender))
-	{
-		Defender->ApplyDamage(AppliedDamage);
-	}
-	// Fallback for BP_Defender until it is reparented onto ANightlightDefender. Remove this once it is.
-	else if (!ApplyDamageToBlueprintDefender(TargetDefender, AppliedDamage))
-	{
-		// Keep Unreal's standard damage path as a fallback for any other actor class.
-		UGameplayStatics::ApplyDamage(TargetDefender, AppliedDamage, nullptr, this, nullptr);
-	}
-
-	const ANightlightDefender* const BaseDefender = Cast<ANightlightDefender>(TargetDefender);
-	if (!IsValid(TargetDefender) || (BaseDefender && BaseDefender->IsDead()))
+	TargetDefender->ApplyDamage(FMath::Max(DefenderAttackDamage, 0.0f));
+	if (!IsValid(TargetDefender) || TargetDefender->IsDead())
 	{
 		ClearDefenderTarget();
 	}

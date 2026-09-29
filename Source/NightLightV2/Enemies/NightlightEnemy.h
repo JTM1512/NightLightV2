@@ -7,6 +7,7 @@
 
 class USceneComponent;
 class ANightlightDreamCore;
+class ANightlightDefender;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FNightlightEnemyHealthChangedSignature,
@@ -90,11 +91,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float CoreDamage = 10.0f;
 
-	// Enemies target ANightlightDefender first. This is only a fallback for BP_Defender until it is
-	// reparented onto ANightlightDefender, and will be removed after that.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack")
-	TSubclassOf<AActor> DefenderClass;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack", meta = (ClampMin = "0.0"))
 	float DefenderAttackRange = 400.0f;
 
@@ -130,7 +126,7 @@ private:
 	TObjectPtr<ANightlightDreamCore> DreamCore;
 
 	UPROPERTY()
-	TObjectPtr<AActor> TargetDefender;
+	TObjectPtr<ANightlightDefender> TargetDefender;
 
 	FTimerHandle DefenderAttackTimerHandle;
 	float TimeUntilDefenderSearch = 0.0f;
