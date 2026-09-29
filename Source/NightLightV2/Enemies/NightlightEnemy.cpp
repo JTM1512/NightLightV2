@@ -1,70 +1,12 @@
 #include "NightlightEnemy.h"
 #include "../Core/NightlightDreamCore.h"
-#include "Blueprint/UserWidget.h"
-#include "Components/ProgressBar.h"
+#include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
-#include "Components/TextBlock.h"
-#include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/UnrealType.h"
 
 namespace
 {
-	UUserWidget* GetWorldHealthWidget(AActor* const Actor)
-	{
-		if (!IsValid(Actor))
-		{
-			return nullptr;
-		}
-
-		UWidgetComponent* const WidgetComponent = Actor->FindComponentByClass<UWidgetComponent>();
-		if (!WidgetComponent)
-		{
-			return nullptr;
-		}
-
-		WidgetComponent->InitWidget();
-		return WidgetComponent->GetUserWidgetObject();
-	}
-
-	void UpdateWorldHealthWidget(
-		AActor* const Actor,
-		const double CurrentHealth,
-		const double MaxHealth,
-		const double DamageTaken = 0.0)
-	{
-		UUserWidget* const HealthWidget = GetWorldHealthWidget(Actor);
-		if (!HealthWidget)
-		{
-			return;
-		}
-
-		if (UProgressBar* const HealthBar = Cast<UProgressBar>(HealthWidget->GetWidgetFromName(TEXT("HealthBar"))))
-		{
-			const float HealthPercent = MaxHealth > 0.0
-				? static_cast<float>(FMath::Clamp(CurrentHealth / MaxHealth, 0.0, 1.0))
-				: 0.0f;
-			HealthBar->SetPercent(HealthPercent);
-		}
-
-		if (UTextBlock* const HealthText = Cast<UTextBlock>(HealthWidget->GetWidgetFromName(TEXT("HealthText"))))
-		{
-			HealthText->SetText(FText::Format(
-				NSLOCTEXT("Nightlight", "WorldHealthFormat", "{0} / {1}"),
-				FText::AsNumber(FMath::RoundToInt(CurrentHealth)),
-				FText::AsNumber(FMath::RoundToInt(MaxHealth))));
-		}
-
-		if (DamageTaken > 0.0)
-		{
-			if (UTextBlock* const DamageText = Cast<UTextBlock>(HealthWidget->GetWidgetFromName(TEXT("DamageText"))))
-			{
-				DamageText->SetText(FText::AsNumber(-FMath::RoundToInt(DamageTaken)));
-				DamageText->SetVisibility(ESlateVisibility::Visible);
-			}
-		}
-	}
-
 	bool ReadNumericProperty(const AActor* const Actor, const FName PropertyName, double& OutValue)
 	{
 		const FNumericProperty* const Property = FindFProperty<FNumericProperty>(Actor->GetClass(), PropertyName);
@@ -117,7 +59,7 @@ namespace
 			return false;
 		}
 
-		UpdateWorldHealthWidget(Defender, NewHealth, MaxHealth, AppliedDamage);
+		NightlightHealthWidgetUtils::UpdateWorldHealthWidget(Defender, NewHealth, MaxHealth, AppliedDamage);
 		if (NewHealth <= 0.0)
 		{
 			Defender->Destroy();
@@ -144,7 +86,7 @@ void ANightlightEnemy::BeginPlay()
 	CurrentHealth = MaxHealth;
 	bIsDead = false;
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
-	UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
 
 	if (CurrentHealth <= 0.0f)
 	{
@@ -215,7 +157,7 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 	const float AppliedDamage = PreviousHealth - CurrentHealth;
 	OnDamageTaken.Broadcast(AppliedDamage);
-	UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth, AppliedDamage);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth, AppliedDamage);
 
 	if (CurrentHealth > 0.0f)
 	{
