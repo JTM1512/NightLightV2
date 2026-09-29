@@ -1,5 +1,6 @@
 #include "NightlightEnemy.h"
 #include "../Core/NightlightDreamCore.h"
+#include "../Defenders/NightlightDefender.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -42,6 +43,7 @@ namespace
 		return true;
 	}
 
+	// Fallback for BP_Defender until it is reparented onto ANightlightDefender. Remove this once it is.
 	bool ApplyDamageToBlueprintDefender(AActor* const Defender, const double DamageAmount)
 	{
 		double CurrentHealth = 0.0;
@@ -183,7 +185,7 @@ void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 		FMath::Max(MovementSpeed, 0.0f));
 
 	// VInterpConstantTo stops at the target instead of moving past the waypoint
-	// (Epic Games, Inc., 2026).
+	// (Epic Games, Inc., 2026a).
 	SetActorLocation(NewLocation);
 
 	const float AcceptanceDistance = FMath::Max(WaypointAcceptanceDistance, 0.0f);
@@ -196,10 +198,16 @@ void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 
 bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 {
-	if (bIsDead || bHasReachedCore || !DefenderClass)
+	if (bIsDead || bHasReachedCore)
 	{
 		ClearDefenderTarget();
 		return false;
+	}
+
+	const ANightlightDefender* const BaseDefender = Cast<ANightlightDefender>(TargetDefender);
+	if (BaseDefender && BaseDefender->IsDead())
+	{
+		ClearDefenderTarget();
 	}
 
 	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
@@ -227,15 +235,18 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 
 void ANightlightEnemy::FindDefenderTarget()
 {
-	TArray<AActor*> Defenders;
-	UGameplayStatics::GetAllActorsOfClass(this, DefenderClass, Defenders);
-
 	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
 	float ClosestDistanceSquared = AttackRangeSquared;
 
-	for (AActor* Defender : Defenders)
+	// Every defender type shares the base class, so one search finds them all
+	// (Epic Games, Inc., 2026b).
+	TArray<AActor*> Defenders;
+	UGameplayStatics::GetAllActorsOfClass(this, ANightlightDefender::StaticClass(), Defenders);
+
+	for (AActor* FoundActor : Defenders)
 	{
-		if (!IsValid(Defender))
+		const ANightlightDefender* const Defender = Cast<ANightlightDefender>(FoundActor);
+		if (!IsValid(Defender) || Defender->IsDead())
 		{
 			continue;
 		}
@@ -243,8 +254,32 @@ void ANightlightEnemy::FindDefenderTarget()
 		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
 		if (DistanceSquared <= ClosestDistanceSquared)
 		{
-			TargetDefender = Defender;
+			TargetDefender = FoundActor;
 			ClosestDistanceSquared = DistanceSquared;
+		}
+	}
+
+	// Fallback for BP_Defender until it is reparented onto ANightlightDefender. Remove this search,
+	// DefenderClass and ApplyDamageToBlueprintDefender once it is.
+	if (!TargetDefender && DefenderClass)
+	{
+		Defenders.Reset();
+		UGameplayStatics::GetAllActorsOfClass(this, DefenderClass, Defenders);
+
+		for (AActor* Defender : Defenders)
+		{
+			// Base class defenders were already checked above.
+			if (!IsValid(Defender) || Defender->IsA<ANightlightDefender>())
+			{
+				continue;
+			}
+
+			const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Defender->GetActorLocation());
+			if (DistanceSquared <= ClosestDistanceSquared)
+			{
+				TargetDefender = Defender;
+				ClosestDistanceSquared = DistanceSquared;
+			}
 		}
 	}
 
@@ -279,13 +314,19 @@ void ANightlightEnemy::AttackTargetDefender()
 	}
 
 	const float AppliedDamage = FMath::Max(DefenderAttackDamage, 0.0f);
-	if (!ApplyDamageToBlueprintDefender(TargetDefender, AppliedDamage))
+	if (ANightlightDefender* const Defender = Cast<ANightlightDefender>(TargetDefender))
 	{
-		// Keep Unreal's standard damage path as a fallback for any future defender class.
+		Defender->ApplyDamage(AppliedDamage);
+	}
+	// Fallback for BP_Defender until it is reparented onto ANightlightDefender. Remove this once it is.
+	else if (!ApplyDamageToBlueprintDefender(TargetDefender, AppliedDamage))
+	{
+		// Keep Unreal's standard damage path as a fallback for any other actor class.
 		UGameplayStatics::ApplyDamage(TargetDefender, AppliedDamage, nullptr, this, nullptr);
 	}
 
-	if (!IsValid(TargetDefender))
+	const ANightlightDefender* const BaseDefender = Cast<ANightlightDefender>(TargetDefender);
+	if (!IsValid(TargetDefender) || (BaseDefender && BaseDefender->IsDead()))
 	{
 		ClearDefenderTarget();
 	}
@@ -346,7 +387,11 @@ void ANightlightEnemy::Die()
 /*
 References
 
-Epic Games, Inc., 2026. FMath::VInterpConstantTo. [online] Available at:
+Epic Games, Inc., 2026a. FMath::VInterpConstantTo. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/VInterpConstantTo>
 [Accessed 31 August 2026].
+
+Epic Games, Inc., 2026b. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
+[Accessed 29 September 2026].
 */

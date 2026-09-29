@@ -90,7 +90,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float CoreDamage = 10.0f;
 
-	// Assign BP_Defender so the enemy only reacts to the teammate's defender type.
+	// Enemies target ANightlightDefender first. This is only a fallback for BP_Defender until it is
+	// reparented onto ANightlightDefender, and will be removed after that.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Defender Attack")
 	TSubclassOf<AActor> DefenderClass;
 
