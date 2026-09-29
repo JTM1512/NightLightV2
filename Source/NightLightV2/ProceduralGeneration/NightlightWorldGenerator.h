@@ -148,6 +148,9 @@ private:
 		TArray<int32>& OutDistances,
 		TArray<int32>& OutClosestRoutes) const;
 
+	// Levels the anchor cell and its eight neighbours so a platform rests on flat ground.
+	void FlattenAnchorPad(const FIntPoint& Anchor, int32 Width);
+
 	// Converts the completed grid into deterministic render and collision arrays.
 	bool BuildTerrainMeshData(FNightlightTerrainMeshData& OutMeshData) const;
 

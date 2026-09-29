@@ -750,6 +750,7 @@ void ANightlightWorldGenerator::GenerateAnchors(
 		FNightlightCellData& AnchorCell = Cells[GetCellIndex(Anchor.X, Anchor.Y, Width)];
 		AnchorCell.Type = ENightlightCellType::PlacementAnchor;
 		AnchorCell.bBuildable = true;
+		FlattenAnchorPad(Anchor, Width);
 	}
 
 	for (int32 RouteIndex = 0; RouteIndex < Routes.Num(); ++RouteIndex)
@@ -833,6 +834,37 @@ void ANightlightWorldGenerator::BuildRouteDistanceField(
 				OutDistances[NextIndex] = OutDistances[CurrentIndex] + 1;
 				OutClosestRoutes[NextIndex] = OutClosestRoutes[CurrentIndex];
 				Frontier.Add(Next);
+			}
+		}
+	}
+}
+
+void ANightlightWorldGenerator::FlattenAnchorPad(const FIntPoint& Anchor, const int32 Width)
+{
+	// Anchors are never on the outer row, so all eight neighbours exist. Their
+	// average height changes the terrain as little as possible while giving the
+	// platform a level base, so no corner sinks into a slope.
+	float HeightSum = 0.0f;
+	for (int32 OffsetY = -1; OffsetY <= 1; ++OffsetY)
+	{
+		for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+		{
+			HeightSum += Cells[GetCellIndex(Anchor.X + OffsetX, Anchor.Y + OffsetY, Width)].Height;
+		}
+	}
+
+	const float PadHeight = HeightSum / 9.0f;
+	for (int32 OffsetY = -1; OffsetY <= 1; ++OffsetY)
+	{
+		for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+		{
+			FNightlightCellData& PadCell = Cells[GetCellIndex(Anchor.X + OffsetX, Anchor.Y + OffsetY, Width)];
+			PadCell.Height = PadHeight;
+
+			// Pad edges stay Ground for colouring but cannot hold a second anchor.
+			if (PadCell.Type == ENightlightCellType::Ground)
+			{
+				PadCell.bBuildable = false;
 			}
 		}
 	}
