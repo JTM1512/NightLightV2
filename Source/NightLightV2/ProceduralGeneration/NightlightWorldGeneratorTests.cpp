@@ -53,6 +53,57 @@ bool FNightlightRouteGenerationTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("Approved anchors remain buildable and cannot be path cells"), bAnchorsStayOffRoutes);
 
+	// Every anchor must sit on a level pad close to a route, and every route
+	// must receive its minimum share of anchors.
+	TArray<int32> PathDistances;
+	TArray<int32> ClosestRoutes;
+	Generator->BuildRouteDistanceField(31, 31, PathDistances, ClosestRoutes);
+
+	TArray<int32> AnchorsPerRoute;
+	AnchorsPerRoute.Init(0, Generator->GetRoutes().Num());
+	bool bAnchorsNearRoutes = true;
+	bool bAnchorPadsFlat = true;
+	for (const FIntPoint& Anchor : Generator->GetAnchorCoordinates())
+	{
+		const int32 AnchorIndex = Generator->GetCellIndex(Anchor.X, Anchor.Y, 31);
+		const int32 PathDistance = PathDistances[AnchorIndex];
+		if (PathDistance < 2 || PathDistance > Generator->GenerationSettings.MaxAnchorPathDistance)
+		{
+			bAnchorsNearRoutes = false;
+		}
+
+		if (AnchorsPerRoute.IsValidIndex(ClosestRoutes[AnchorIndex]))
+		{
+			++AnchorsPerRoute[ClosestRoutes[AnchorIndex]];
+		}
+
+		const float AnchorHeight = Generator->Cells[AnchorIndex].Height;
+		for (int32 OffsetY = -1; OffsetY <= 1; ++OffsetY)
+		{
+			for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+			{
+				const float PadHeight =
+					Generator->Cells[Generator->GetCellIndex(Anchor.X + OffsetX, Anchor.Y + OffsetY, 31)].Height;
+				if (!FMath::IsNearlyEqual(PadHeight, AnchorHeight))
+				{
+					bAnchorPadsFlat = false;
+				}
+			}
+		}
+	}
+	TestTrue(TEXT("Anchors stay within reach of a route"), bAnchorsNearRoutes);
+	TestTrue(TEXT("Anchor pads are level so platforms do not sink into slopes"), bAnchorPadsFlat);
+
+	bool bEveryRouteDefended = true;
+	for (const int32 RouteAnchorCount : AnchorsPerRoute)
+	{
+		if (RouteAnchorCount < Generator->GenerationSettings.MinAnchorsPerRoute)
+		{
+			bEveryRouteDefended = false;
+		}
+	}
+	TestTrue(TEXT("Every route receives its minimum number of anchors"), bEveryRouteDefended);
+
 	// Keep the ordered routes, generate them again and compare the public contract.
 	const TArray<FNightlightRouteData> FirstRoutes = Generator->GetRoutes();
 	Generator->GenerateLogicalGrid();
