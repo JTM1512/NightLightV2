@@ -141,6 +141,13 @@ private:
 	// Selects repeatable Ground cells after routes have reserved their space.
 	void GenerateAnchors(int32 Width, int32 Depth, FRandomStream& RandomStream);
 
+	// Finds each cell's grid distance to the closest route cell and which route that is.
+	void BuildRouteDistanceField(
+		int32 Width,
+		int32 Depth,
+		TArray<int32>& OutDistances,
+		TArray<int32>& OutClosestRoutes) const;
+
 	// Converts the completed grid into deterministic render and collision arrays.
 	bool BuildTerrainMeshData(FNightlightTerrainMeshData& OutMeshData) const;
 

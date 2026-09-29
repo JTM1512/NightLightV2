@@ -737,6 +737,69 @@ void ANightlightWorldGenerator::GenerateAnchors(
 	}
 }
 
+void ANightlightWorldGenerator::BuildRouteDistanceField(
+	const int32 Width,
+	const int32 Depth,
+	TArray<int32>& OutDistances,
+	TArray<int32>& OutClosestRoutes) const
+{
+	OutDistances.Init(MAX_int32, Width * Depth);
+	OutClosestRoutes.Init(INDEX_NONE, Width * Depth);
+
+	// Every route cell except the shared Core starts a breadth-first search at
+	// distance zero. Starting from many points at once lets one pass find the
+	// closest route for every cell (Patel, 2026). Expanding through all eight
+	// neighbours measures that distance in whole grid steps, including diagonals.
+	TArray<FIntPoint> Frontier;
+	for (int32 RouteIndex = 0; RouteIndex < Routes.Num(); ++RouteIndex)
+	{
+		for (const FIntPoint& Coordinate : Routes[RouteIndex].CellsToCore)
+		{
+			const int32 CellIndex = GetCellIndex(Coordinate.X, Coordinate.Y, Width);
+			if (Cells[CellIndex].Type == ENightlightCellType::Core || OutDistances[CellIndex] == 0)
+			{
+				continue;
+			}
+
+			OutDistances[CellIndex] = 0;
+			OutClosestRoutes[CellIndex] = RouteIndex;
+			Frontier.Add(Coordinate);
+		}
+	}
+
+	// The Core is reserved but belongs to no single route.
+	const FIntPoint CoreCoordinate(Width / 2, Depth / 2);
+	OutDistances[GetCellIndex(CoreCoordinate.X, CoreCoordinate.Y, Width)] = 0;
+
+	for (int32 FrontierIndex = 0; FrontierIndex < Frontier.Num(); ++FrontierIndex)
+	{
+		const FIntPoint Current = Frontier[FrontierIndex];
+		const int32 CurrentIndex = GetCellIndex(Current.X, Current.Y, Width);
+
+		for (int32 OffsetY = -1; OffsetY <= 1; ++OffsetY)
+		{
+			for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+			{
+				const FIntPoint Next(Current.X + OffsetX, Current.Y + OffsetY);
+				if (Next.X < 0 || Next.X >= Width || Next.Y < 0 || Next.Y >= Depth)
+				{
+					continue;
+				}
+
+				const int32 NextIndex = GetCellIndex(Next.X, Next.Y, Width);
+				if (OutDistances[NextIndex] != MAX_int32)
+				{
+					continue;
+				}
+
+				OutDistances[NextIndex] = OutDistances[CurrentIndex] + 1;
+				OutClosestRoutes[NextIndex] = OutClosestRoutes[CurrentIndex];
+				Frontier.Add(Next);
+			}
+		}
+	}
+}
+
 int32 ANightlightWorldGenerator::ResolveSessionSeed() const
 {
 	// Random for normal play; fixed for repeatable testing.
@@ -782,6 +845,9 @@ Scripting in Unreal Engine. [online] Available at:
 fettis GameDev, 2022. Terrain generation in C++ for Beginners - Unreal Engine
 tutorial. [video online] Available at: <https://www.youtube.com/watch?v=sNZ2g4qah28>
 [Accessed 30 August 2026].
+
+Patel, A., 2026. Breadth First Search: multiple start points. [online] Available at:
+<https://www.redblobgames.com/pathfinding/distance-to-any/> [Accessed 29 September 2026].
 
 Unreal Engine, 2015. Blueprint Quickshot: Random Streams | 12 | v4.7 Tutorial
 Series. [video online] Available at: <https://www.youtube.com/watch?v=kGpsMEMDrjQ>
