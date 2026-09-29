@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TimerManager.h"
 #include "NightlightDefender.generated.h"
 
 class USceneComponent;
+class ANightlightEnemy;
 
 // Dynamic multicast delegates let several Blueprints, such as the health bar, bind to the same
 // event (Epic Games, Inc., 2026c).
@@ -72,6 +74,31 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Defender")
 	bool bIsDead = false;
 
+	// Off by default because BP_Defender already has its own Blueprint attack. Turning this on
+	// for it after the reparent would make it attack twice. New defender types turn it on.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Attack")
+	bool bAutoAttack = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Attack", meta = (ClampMin = "0.0"))
+	float AttackRange = 600.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Attack", meta = (ClampMin = "0.0"))
+	float AttackDamage = 20.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Attack", meta = (ClampMin = "0.1"))
+	float AttackInterval = 1.0f;
+
+	// New defender types only override FindTarget and PerformAttack, in C++ or Blueprint.
+	// BlueprintNativeEvent keeps a C++ default that a Blueprint can replace (Epic Games, Inc., 2026e).
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Nightlight|Defender|Attack")
+	ANightlightEnemy* FindTarget();
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Nightlight|Defender|Attack")
+	void PerformAttack(ANightlightEnemy* Target);
+
 private:
+	FTimerHandle AttackTimerHandle;
+
+	void HandleAttackTimer();
 	void Die();
 };

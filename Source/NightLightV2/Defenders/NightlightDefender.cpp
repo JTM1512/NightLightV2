@@ -1,6 +1,8 @@
 #include "NightlightDefender.h"
+#include "../Enemies/NightlightEnemy.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 ANightlightDefender::ANightlightDefender()
 {
@@ -24,7 +26,22 @@ void ANightlightDefender::BeginPlay()
 	if (CurrentHealth <= 0.0f)
 	{
 		Die();
+		return;
 	}
+
+	if (!bAutoAttack)
+	{
+		return;
+	}
+
+	// A looping timer attacks at a fixed rate without searching for enemies every frame
+	// (Epic Games, Inc., 2026d).
+	GetWorldTimerManager().SetTimer(
+		AttackTimerHandle,
+		this,
+		&ANightlightDefender::HandleAttackTimer,
+		FMath::Max(AttackInterval, 0.1f),
+		true);
 }
 
 float ANightlightDefender::TakeDamage(
@@ -63,6 +80,57 @@ void ANightlightDefender::ApplyDamage(const float DamageAmount)
 	Die();
 }
 
+ANightlightEnemy* ANightlightDefender::FindTarget_Implementation()
+{
+	// The default target is the closest living enemy inside the attack range, found the same way as
+	// the Dream Core finds its targets (Epic Games, Inc., 2026f).
+	TArray<AActor*> FoundEnemies;
+	UGameplayStatics::GetAllActorsOfClass(this, ANightlightEnemy::StaticClass(), FoundEnemies);
+
+	ANightlightEnemy* ClosestEnemy = nullptr;
+	float ClosestDistanceSquared = FMath::Square(FMath::Max(AttackRange, 0.0f));
+
+	for (AActor* FoundActor : FoundEnemies)
+	{
+		ANightlightEnemy* Enemy = Cast<ANightlightEnemy>(FoundActor);
+		if (!IsValid(Enemy) || Enemy->IsDead())
+		{
+			continue;
+		}
+
+		const float DistanceSquared = FVector::DistSquared(GetActorLocation(), Enemy->GetActorLocation());
+		if (DistanceSquared <= ClosestDistanceSquared)
+		{
+			ClosestEnemy = Enemy;
+			ClosestDistanceSquared = DistanceSquared;
+		}
+	}
+
+	return ClosestEnemy;
+}
+
+void ANightlightDefender::PerformAttack_Implementation(ANightlightEnemy* const Target)
+{
+	if (IsValid(Target))
+	{
+		Target->ApplyDamage(FMath::Max(AttackDamage, 0.0f));
+	}
+}
+
+void ANightlightDefender::HandleAttackTimer()
+{
+	if (bIsDead || AttackRange <= 0.0f || AttackDamage <= 0.0f)
+	{
+		return;
+	}
+
+	ANightlightEnemy* const Target = FindTarget();
+	if (IsValid(Target) && !Target->IsDead())
+	{
+		PerformAttack(Target);
+	}
+}
+
 void ANightlightDefender::Die()
 {
 	if (bIsDead)
@@ -72,6 +140,7 @@ void ANightlightDefender::Die()
 
 	// Set this first so a listener cannot kill the defender twice.
 	bIsDead = true;
+	GetWorldTimerManager().ClearTimer(AttackTimerHandle);
 	OnDefenderDied.Broadcast();
 
 	// The placement platform only frees up when the defender is destroyed
@@ -92,5 +161,17 @@ Epic Games, Inc., 2026b. AActor::TakeDamage. [online] Available at:
 
 Epic Games, Inc., 2026c. Dynamic Delegates in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-delegates-in-unreal-engine>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026d. Gameplay Timers in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026e. UFunctions in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026f. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 */
