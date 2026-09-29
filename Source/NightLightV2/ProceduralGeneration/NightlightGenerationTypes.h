@@ -100,8 +100,18 @@ struct NIGHTLIGHTV2_API FNightlightGenerationSettings
 	int32 AnchorCount = 12;
 
 	// Minimum straight-line distance between anchors, measured in grid cells.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Anchors", meta = (ClampMin = "1"))
+	// Values below three are raised to three so neighbouring pads never overlap.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Anchors", meta = (ClampMin = "3"))
 	int32 MinimumAnchorSpacing = 4;
+
+	// Furthest an anchor may sit from its closest route, measured in grid cells.
+	// Keeps every defender close enough to reach enemies on the path.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Anchors", meta = (ClampMin = "2"))
+	int32 MaxAnchorPathDistance = 3;
+
+	// Anchors reserved for each route before any remaining anchors are shared out.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation|Anchors", meta = (ClampMin = "1"))
+	int32 MinAnchorsPerRoute = 3;
 
 	// Debug seed used when random session seeds are disabled.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Generation")

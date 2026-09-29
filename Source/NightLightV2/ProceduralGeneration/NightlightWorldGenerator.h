@@ -138,7 +138,7 @@ private:
 	// Checks route count, ordering, connectivity, cell roles and overlap.
 	bool ValidateGeneratedRoutes(const FIntPoint& CoreCoordinate, int32 Width, int32 Depth) const;
 
-	// Selects repeatable Ground cells after routes have reserved their space.
+	// Selects repeatable Ground cells beside every route after routes have reserved their space.
 	void GenerateAnchors(int32 Width, int32 Depth, FRandomStream& RandomStream);
 
 	// Finds each cell's grid distance to the closest route cell and which route that is.

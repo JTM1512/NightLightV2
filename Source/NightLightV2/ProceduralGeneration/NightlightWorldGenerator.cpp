@@ -630,111 +630,149 @@ void ANightlightWorldGenerator::GenerateAnchors(
 {
 	AnchorCoordinates.Reset();
 
-	const int32 RequestedAnchorCount = FMath::Max(GenerationSettings.AnchorCount, 0);
-	if (RequestedAnchorCount == 0)
+	if (GenerationSettings.AnchorCount <= 0 || Routes.IsEmpty())
 	{
 		UE_LOG(LogTemp, Log, TEXT("Nightlight anchors requested: 0. Generated: 0."));
 		return;
 	}
 
-	TArray<FIntPoint> Candidates;
+	// Raise the total when needed so every route can receive its minimum share.
+	const int32 RequiredPerRoute = FMath::Max(GenerationSettings.MinAnchorsPerRoute, 1);
+	const int32 RequestedAnchorCount = FMath::Max(GenerationSettings.AnchorCount, RequiredPerRoute * Routes.Num());
 
-	// The outside row is kept free for map entrances. Every remaining candidate
-	// also checks its neighbours so routes, Rifts and the Core keep one clear cell.
+	TArray<int32> PathDistances;
+	TArray<int32> ClosestRoutes;
+	BuildRouteDistanceField(Width, Depth, PathDistances, ClosestRoutes);
+
+	// A distance of two keeps the anchor's flattened 3x3 pad off the path, while
+	// the upper limit keeps the defender within reach of passing enemies.
+	const int32 MinimumPathDistance = 2;
+	const int32 MaximumPathDistance = FMath::Max(GenerationSettings.MaxAnchorPathDistance, MinimumPathDistance);
+
+	// Candidates are grouped by the route they sit beside, so every route can be
+	// given its own defenders instead of leaving one route undefended.
+	TArray<TArray<FIntPoint>> CandidatesByRoute;
+	CandidatesByRoute.SetNum(Routes.Num());
+
+	// The outside row is kept free for map entrances.
 	for (int32 Y = 1; Y < Depth - 1; ++Y)
 	{
 		for (int32 X = 1; X < Width - 1; ++X)
 		{
-			const FNightlightCellData& Cell = Cells[GetCellIndex(X, Y, Width)];
-			if (Cell.Type != ENightlightCellType::Ground || !Cell.bBuildable)
+			const int32 CellIndex = GetCellIndex(X, Y, Width);
+			const FNightlightCellData& Cell = Cells[CellIndex];
+			const int32 PathDistance = PathDistances[CellIndex];
+			if (Cell.Type != ENightlightCellType::Ground
+				|| !Cell.bBuildable
+				|| PathDistance < MinimumPathDistance
+				|| PathDistance > MaximumPathDistance
+				|| !CandidatesByRoute.IsValidIndex(ClosestRoutes[CellIndex]))
 			{
 				continue;
 			}
 
-			bool bClearOfReservedCells = true;
-			for (int32 OffsetY = -1; OffsetY <= 1 && bClearOfReservedCells; ++OffsetY)
+			CandidatesByRoute[ClosestRoutes[CellIndex]].Emplace(X, Y);
+		}
+	}
+
+	// Shuffle each group once with the active stream. This keeps the layout
+	// different for each seed and repeatable for a fixed seed
+	// (Epic Games, Inc., 2026c; Unreal Engine, 2015).
+	for (TArray<FIntPoint>& Candidates : CandidatesByRoute)
+	{
+		for (int32 Index = 0; Index < Candidates.Num() - 1; ++Index)
+		{
+			const int32 SwapIndex = RandomStream.RandRange(Index, Candidates.Num() - 1);
+			Candidates.Swap(Index, SwapIndex);
+		}
+	}
+
+	// Spacing of at least three cells means two 3x3 pads can never overlap.
+	const int32 MinimumSpacing = FMath::Max(GenerationSettings.MinimumAnchorSpacing, 3);
+	const int32 MinimumSpacingSquared = MinimumSpacing * MinimumSpacing;
+
+	TArray<int32> NextCandidateIndex;
+	NextCandidateIndex.Init(0, Routes.Num());
+	TArray<int32> AnchorsPerRoute;
+	AnchorsPerRoute.Init(0, Routes.Num());
+
+	// Takes the next candidate for one route that respects the spacing rule.
+	auto TryAddAnchorForRoute = [&](const int32 RouteIndex) -> bool
+	{
+		TArray<FIntPoint>& Candidates = CandidatesByRoute[RouteIndex];
+		while (NextCandidateIndex[RouteIndex] < Candidates.Num())
+		{
+			const FIntPoint Candidate = Candidates[NextCandidateIndex[RouteIndex]++];
+
+			bool bFarEnoughFromOtherAnchors = true;
+			for (const FIntPoint& ExistingAnchor : AnchorCoordinates)
 			{
-				for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+				const FIntPoint Difference = Candidate - ExistingAnchor;
+				if (Difference.X * Difference.X + Difference.Y * Difference.Y < MinimumSpacingSquared)
 				{
-					const FNightlightCellData& Neighbour =
-						Cells[GetCellIndex(X + OffsetX, Y + OffsetY, Width)];
-					if (Neighbour.Type == ENightlightCellType::Path
-						|| Neighbour.Type == ENightlightCellType::Rift
-						|| Neighbour.Type == ENightlightCellType::Core)
-					{
-						bClearOfReservedCells = false;
-						break;
-					}
+					bFarEnoughFromOtherAnchors = false;
+					break;
 				}
 			}
 
-			if (bClearOfReservedCells)
+			if (bFarEnoughFromOtherAnchors)
 			{
-				Candidates.Emplace(X, Y);
+				AnchorCoordinates.Add(Candidate);
+				++AnchorsPerRoute[RouteIndex];
+				return true;
 			}
 		}
-	}
+		return false;
+	};
 
-	// Shuffle once with the active stream, then accept the first valid positions.
-	// This keeps the result simple and repeatable for a fixed seed
-	// (Epic Games, Inc., 2026c; Unreal Engine, 2015).
-	for (int32 Index = 0; Index < Candidates.Num() - 1; ++Index)
+	// Deal anchors out one route at a time, like cards, until the request is met
+	// or no route has a valid candidate left. Round-robin order gives each route
+	// its minimum share first and then spreads the remainder evenly.
+	bool bAddedAnchorThisRound = true;
+	while (AnchorCoordinates.Num() < RequestedAnchorCount && bAddedAnchorThisRound)
 	{
-		const int32 SwapIndex = RandomStream.RandRange(Index, Candidates.Num() - 1);
-		Candidates.Swap(Index, SwapIndex);
-	}
-
-	const int32 MinimumSpacing = FMath::Max(GenerationSettings.MinimumAnchorSpacing, 1);
-	const int32 MinimumSpacingSquared = MinimumSpacing * MinimumSpacing;
-
-	for (const FIntPoint& Candidate : Candidates)
-	{
-		bool bFarEnoughFromOtherAnchors = true;
-		for (const FIntPoint& ExistingAnchor : AnchorCoordinates)
+		bAddedAnchorThisRound = false;
+		for (int32 RouteIndex = 0; RouteIndex < Routes.Num(); ++RouteIndex)
 		{
-			const FIntPoint Difference = Candidate - ExistingAnchor;
-			const int32 DistanceSquared = Difference.X * Difference.X + Difference.Y * Difference.Y;
-			if (DistanceSquared < MinimumSpacingSquared)
+			if (AnchorCoordinates.Num() >= RequestedAnchorCount)
 			{
-				bFarEnoughFromOtherAnchors = false;
 				break;
 			}
+			if (TryAddAnchorForRoute(RouteIndex))
+			{
+				bAddedAnchorThisRound = true;
+			}
 		}
+	}
 
-		if (!bFarEnoughFromOtherAnchors)
-		{
-			continue;
-		}
-
-		AnchorCoordinates.Add(Candidate);
-		FNightlightCellData& AnchorCell = Cells[GetCellIndex(Candidate.X, Candidate.Y, Width)];
+	for (const FIntPoint& Anchor : AnchorCoordinates)
+	{
+		FNightlightCellData& AnchorCell = Cells[GetCellIndex(Anchor.X, Anchor.Y, Width)];
 		AnchorCell.Type = ENightlightCellType::PlacementAnchor;
 		AnchorCell.bBuildable = true;
+	}
 
-		if (AnchorCoordinates.Num() >= RequestedAnchorCount)
+	for (int32 RouteIndex = 0; RouteIndex < Routes.Num(); ++RouteIndex)
+	{
+		if (AnchorsPerRoute[RouteIndex] < RequiredPerRoute)
 		{
-			break;
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("Nightlight route %d received %d anchors, fewer than the %d requested per route."),
+				RouteIndex,
+				AnchorsPerRoute[RouteIndex],
+				RequiredPerRoute);
 		}
 	}
 
-	if (AnchorCoordinates.Num() < RequestedAnchorCount)
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("Nightlight anchors requested: %d. Generated: %d. The remaining terrain did not meet clearance and spacing rules."),
-			RequestedAnchorCount,
-			AnchorCoordinates.Num());
-	}
-	else
-	{
-		UE_LOG(
-			LogTemp,
-			Log,
-			TEXT("Nightlight anchors requested: %d. Generated: %d."),
-			RequestedAnchorCount,
-			AnchorCoordinates.Num());
-	}
+	UE_LOG(
+		LogTemp,
+		Log,
+		TEXT("Nightlight anchors requested: %d. Generated: %d across %d routes."),
+		RequestedAnchorCount,
+		AnchorCoordinates.Num(),
+		Routes.Num());
 }
 
 void ANightlightWorldGenerator::BuildRouteDistanceField(
