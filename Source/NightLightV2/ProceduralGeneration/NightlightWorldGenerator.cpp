@@ -43,7 +43,7 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 	ActiveSeed = ResolveSessionSeed();
 
 	// One seeded stream controls terrain, Rift selection and route turns. A fixed
-	// seed therefore repeats the complete logical map (Epic Games, Inc., 2026c;
+	// seed therefore repeats the complete logical map (Epic Games, Inc., 2026e;
 	// Unreal Engine, 2015).
 	FRandomStream RandomStream(ActiveSeed);
 
@@ -66,7 +66,7 @@ void ANightlightWorldGenerator::GenerateLogicalGrid()
 			Cell.GridCoordinate = FIntPoint(X, Y);
 
 			// Use continuous noise for the first height pass
-			// (Epic Games, Inc., 2026b).
+			// (Epic Games, Inc., 2026d).
 			// Frequency scales grid coordinates into the noise domain.
 			const FVector2D NoiseLocation =
 				(FVector2D(X, Y) + NoiseOffset) * GenerationSettings.NoiseFrequency;
@@ -160,7 +160,7 @@ TArray<FVector> ANightlightWorldGenerator::GetRouteWorldLocations(const int32 Ro
 			Cells[CellIndex].Height);
 
 		// Use the same cell height and generator transform as the terrain and
-		// Lucid Anchors (Epic Games, Inc., 2026e).
+		// Lucid Anchors (Epic Games, Inc., 2026f).
 		WorldLocations.Add(GetActorTransform().TransformPosition(LocalLocation));
 	}
 
@@ -220,7 +220,7 @@ TArray<FVector> ANightlightWorldGenerator::GetAnchorWorldLocations() const
 
 		// Anchor data starts in the generator's local grid space. TransformPosition
 		// applies the Actor's location, rotation and scale for Blueprint placement
-		// (Epic Games, Inc., 2026e).
+		// (Epic Games, Inc., 2026f).
 		WorldLocations.Add(GetActorTransform().TransformPosition(LocalLocation));
 	}
 
@@ -258,7 +258,7 @@ void ANightlightWorldGenerator::RebuildTerrainMesh()
 
 	// CreateMeshSection consumes the same arrays for rendering and optional
 	// collision, so the player cannot collide with a different terrain shape
-	// (Epic Games, Inc., 2026d).
+	// (Epic Games, Inc., 2026a).
 	TerrainMesh->CreateMeshSection_LinearColor(
 		0,
 		MeshData.Vertices,
@@ -389,7 +389,7 @@ void ANightlightWorldGenerator::GenerateRoutes(
 
 	// Shuffle the four edge identifiers with the active stream, then sample them
 	// without replacement. Each map receives different Rifts while a fixed seed
-	// repeats the same selection (Epic Games, Inc., 2026c).
+	// repeats the same selection (Epic Games, Inc., 2026e).
 	TArray<int32> EdgeOrder = { 0, 1, 2, 3 };
 	for (int32 Index = 0; Index < EdgeOrder.Num() - 1; ++Index)
 	{
@@ -513,7 +513,7 @@ void ANightlightWorldGenerator::ApplyRouteToGrid(
 			: 1.0f;
 
 		// Blend from the original Rift height to the flat Core. This removes noise
-		// spikes and gives future enemies a gradual slope (Epic Games, Inc., 2026a).
+		// spikes and gives future enemies a gradual slope (Epic Games, Inc., 2026c).
 		Cell.Height = FMath::Lerp(RiftHeight, 0.0f, RouteAlpha);
 		Cell.bBuildable = false;
 
@@ -677,7 +677,7 @@ void ANightlightWorldGenerator::GenerateAnchors(
 
 	// Shuffle each group once with the active stream. This keeps the layout
 	// different for each seed and repeatable for a fixed seed
-	// (Epic Games, Inc., 2026c; Unreal Engine, 2015).
+	// (Epic Games, Inc., 2026e; Unreal Engine, 2015).
 	for (TArray<FIntPoint>& Candidates : CandidatesByRoute)
 	{
 		for (int32 Index = 0; Index < Candidates.Num() - 1; ++Index)
@@ -887,29 +887,29 @@ int32 ANightlightWorldGenerator::GetCellIndex(const int32 X, const int32 Y, cons
 /*
 References
 
-Epic Games, Inc., 2026a. FMath::Lerp. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/Lerp>
-[Accessed 28 August 2026].
-
-Epic Games, Inc., 2026b. FMath::PerlinNoise2D. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/PerlinNoise2D>
-[Accessed 28 August 2026].
-
-Epic Games, Inc., 2026c. Random Streams in Unreal Engine. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/random-streams-in-unreal-engine>
-[Accessed 28 August 2026].
-
-Epic Games, Inc., 2026d. Create Mesh Section. [online] Available at:
+Epic Games, Inc., 2026a. Create Mesh Section. [online] Available at:
 <https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Components/ProceduralMesh/CreateMeshSection>
 [Accessed 30 August 2026].
 
-Epic Games, Inc., 2026e. TTransform::TransformPosition. [online] Available at:
-<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/Math/TTransform/TransformPosition>
-[Accessed 30 August 2026].
-
-Epic Games, Inc., 2026f. Exposing Gameplay Elements to Blueprints Visual
+Epic Games, Inc., 2026b. Exposing Gameplay Elements to Blueprints Visual
 Scripting in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/unreal-engine/exposing-gameplay-elements-to-blueprints-visual-scripting-in-unreal-engine>
+[Accessed 30 August 2026].
+
+Epic Games, Inc., 2026c. FMath::Lerp. [online] Available at:
+<https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/Lerp>
+[Accessed 28 August 2026].
+
+Epic Games, Inc., 2026d. FMath::PerlinNoise2D. [online] Available at:
+<https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/PerlinNoise2D>
+[Accessed 28 August 2026].
+
+Epic Games, Inc., 2026e. Random Streams in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/unreal-engine/random-streams-in-unreal-engine>
+[Accessed 28 August 2026].
+
+Epic Games, Inc., 2026f. TTransform::TransformPosition. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/Math/TTransform/TransformPosition>
 [Accessed 30 August 2026].
 
 fettis GameDev, 2022. Terrain generation in C++ for Beginners - Unreal Engine

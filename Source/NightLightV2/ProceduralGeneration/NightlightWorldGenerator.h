@@ -51,7 +51,7 @@ public:
 	bool GetCoreWorldLocation(FVector& OutCoreWorldLocation) const;
 
 	// Exposes the approved logical cells as a data-only Blueprint node because
-	// reading the generated contract does not change it (Epic Games, Inc., 2026f).
+	// reading the generated contract does not change it (Epic Games, Inc., 2026b).
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation|Anchors")
 	const TArray<FIntPoint>& GetAnchorCoordinates() const { return AnchorCoordinates; }
 
