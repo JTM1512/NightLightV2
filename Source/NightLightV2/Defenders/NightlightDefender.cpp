@@ -1,0 +1,96 @@
+#include "NightlightDefender.h"
+#include "../UI/NightlightHealthWidgetUtils.h"
+#include "Components/SceneComponent.h"
+
+ANightlightDefender::ANightlightDefender()
+{
+	PrimaryActorTick.bCanEverTick = false;
+
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+}
+
+void ANightlightDefender::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Blueprint defender types can change MaxHealth, so copy it when the game starts.
+	MaxHealth = FMath::Max(MaxHealth, 0.0f);
+	CurrentHealth = MaxHealth;
+	bIsDead = false;
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+
+	if (CurrentHealth <= 0.0f)
+	{
+		Die();
+	}
+}
+
+float ANightlightDefender::TakeDamage(
+	const float DamageAmount,
+	const FDamageEvent& DamageEvent,
+	AController* const EventInstigator,
+	AActor* const DamageCauser)
+{
+	// Unreal's standard damage calls also reach the defender's own health
+	// (Epic Games, Inc., 2026b).
+	const float AppliedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	ApplyDamage(AppliedDamage);
+	return AppliedDamage;
+}
+
+void ANightlightDefender::ApplyDamage(const float DamageAmount)
+{
+	if (bIsDead || DamageAmount <= 0.0f)
+	{
+		return;
+	}
+
+	// A strong attack can reach zero, but health must never become negative.
+	const float PreviousHealth = CurrentHealth;
+	CurrentHealth = FMath::Clamp(CurrentHealth - DamageAmount, 0.0f, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	const float AppliedDamage = PreviousHealth - CurrentHealth;
+	OnDamageTaken.Broadcast(AppliedDamage);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth, AppliedDamage);
+
+	if (CurrentHealth > 0.0f)
+	{
+		return;
+	}
+
+	Die();
+}
+
+void ANightlightDefender::Die()
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	// Set this first so a listener cannot kill the defender twice.
+	bIsDead = true;
+	OnDefenderDied.Broadcast();
+
+	// The placement platform only frees up when the defender is destroyed
+	// (Epic Games, Inc., 2026a).
+	Destroy();
+}
+
+/*
+References
+
+Epic Games, Inc., 2026a. AActor::Destroy. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/Destroy>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026b. AActor::TakeDamage. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/TakeDamage>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026c. Dynamic Delegates in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-delegates-in-unreal-engine>
+[Accessed 29 September 2026].
+*/
