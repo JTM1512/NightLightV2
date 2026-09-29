@@ -1,5 +1,6 @@
 #include "NightlightDefender.h"
 #include "../Enemies/NightlightEnemy.h"
+#include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -15,6 +16,12 @@ ANightlightDefender::ANightlightDefender()
 void ANightlightDefender::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// The registry lets enemies find this defender without an actor search.
+	if (UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
+	{
+		Registry->RegisterDefender(this);
+	}
 
 	// Blueprint defender types can change MaxHealth, so copy it when the game starts.
 	MaxHealth = FMath::Max(MaxHealth, 0.0f);
@@ -42,6 +49,21 @@ void ANightlightDefender::BeginPlay()
 		&ANightlightDefender::HandleAttackTimer,
 		FMath::Max(AttackInterval, 0.1f),
 		true);
+}
+
+void ANightlightDefender::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// EndPlay runs when the defender is destroyed or the level ends, so both remove it from the
+	// registry (Epic Games, Inc., 2026g).
+	if (UWorld* const World = GetWorld())
+	{
+		if (UNightlightActorRegistrySubsystem* const Registry = World->GetSubsystem<UNightlightActorRegistrySubsystem>())
+		{
+			Registry->UnregisterDefender(this);
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 float ANightlightDefender::TakeDamage(
@@ -173,5 +195,9 @@ Epic Games, Inc., 2026e. UFunctions in Unreal Engine. [online] Available at:
 
 Epic Games, Inc., 2026f. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026g. Unreal Engine Actor Lifecycle. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-actor-lifecycle>
 [Accessed 29 September 2026].
 */

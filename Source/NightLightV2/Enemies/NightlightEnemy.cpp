@@ -1,6 +1,7 @@
 #include "NightlightEnemy.h"
 #include "../Core/NightlightDreamCore.h"
 #include "../Defenders/NightlightDefender.h"
+#include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -18,6 +19,12 @@ void ANightlightEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// The registry lets defenders, the Core and the later wave director find this enemy without an actor search.
+	if (UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
+	{
+		Registry->RegisterEnemy(this);
+	}
+
 	// Blueprint enemy types can change MaxHealth, so copy it when the game starts.
 	MaxHealth = FMath::Max(MaxHealth, 0.0f);
 	CurrentHealth = MaxHealth;
@@ -29,6 +36,21 @@ void ANightlightEnemy::BeginPlay()
 	{
 		Die();
 	}
+}
+
+void ANightlightEnemy::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// EndPlay runs when the enemy dies, reaches the Core or the level ends, so this one call covers
+	// every way an enemy leaves play (Epic Games, Inc., 2026e).
+	if (UWorld* const World = GetWorld())
+	{
+		if (UNightlightActorRegistrySubsystem* const Registry = World->GetSubsystem<UNightlightActorRegistrySubsystem>())
+		{
+			Registry->UnregisterEnemy(this);
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ANightlightEnemy::Tick(const float DeltaTime)
@@ -324,5 +346,9 @@ Epic Games, Inc., 2026c. UFunctions in Unreal Engine. [online] Available at:
 
 Epic Games, Inc., 2026d. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
+[Accessed 29 September 2026].
+
+Epic Games, Inc., 2026e. Unreal Engine Actor Lifecycle. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-actor-lifecycle>
 [Accessed 29 September 2026].
 */

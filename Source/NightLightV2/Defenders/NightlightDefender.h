@@ -59,6 +59,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// Blueprint children can attach their mesh and other visuals to this root.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
