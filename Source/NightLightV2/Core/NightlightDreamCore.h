@@ -36,6 +36,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Dream Core")
 	float GetMaxHealth() const { return MaxHealth; }
 
+	// Ranged enemies read this so they always stop close enough for the Core to hit them.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Dream Core|Attack")
+	float GetAttackRange() const { return AttackRange; }
+
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Dream Core")
 	FNightlightCoreHealthChangedSignature OnCoreHealthChanged;
 

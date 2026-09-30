@@ -143,6 +143,12 @@ protected:
 
 	virtual void Die();
 
+	// Ranged types fire their projectiles at the same Core the spawner assigned.
+	ANightlightDreamCore* GetDreamCore() const { return DreamCore; }
+
+	// Stops the defender attack timer, for example when a type switches to attacking the Core.
+	void ClearDefenderTarget();
+
 private:
 	UPROPERTY()
 	TObjectPtr<ANightlightDreamCore> DreamCore;
@@ -155,6 +161,5 @@ private:
 
 	bool UpdateDefenderCombat(float DeltaTime);
 	void AttackTargetDefender();
-	void ClearDefenderTarget();
 	void ReachNextWaypoint();
 };
