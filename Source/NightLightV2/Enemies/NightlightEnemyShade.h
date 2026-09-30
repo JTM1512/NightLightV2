@@ -15,6 +15,10 @@ class NIGHTLIGHTV2_API ANightlightEnemyShade : public ANightlightEnemy
 public:
 	ANightlightEnemyShade();
 
+	// CoreAttackRange limited to stay inside the assigned Core's AttackRange. Public so tests and the HUD can read it.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy|Shade|Core Attack")
+	float GetEffectiveCoreAttackRange() const;
+
 protected:
 	// Set this to BP_EnemyProjectile so the shot has a visible mesh.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Shade")
@@ -53,10 +57,6 @@ protected:
 
 	// Spawns a projectile facing the target. Returns null when no projectile could be spawned.
 	ANightlightEnemyProjectile* FireProjectileAt(AActor* Target, float Damage);
-
-	// CoreAttackRange limited to stay inside the assigned Core's AttackRange.
-	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy|Shade|Core Attack")
-	float GetEffectiveCoreAttackRange() const;
 
 private:
 	FTimerHandle CoreAttackTimerHandle;

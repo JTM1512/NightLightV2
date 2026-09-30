@@ -69,8 +69,7 @@ bool FNightlightActorRegistryTest::RunTest(const FString& Parameters)
 		Registry->FindClosestDefender(FVector::ZeroVector, 250.0f) == Defender);
 	TestNull(TEXT("No defender is found out of range"), Registry->FindClosestDefender(FVector::ZeroVector, 150.0f));
 
-	// A lethal hit kills and destroys the near enemy. Its entry is still in the list because EndPlay
-	// never runs in this world, so the lookups must skip it themselves.
+	// A lethal hit kills the near enemy, which removes itself from the registry at once.
 	NearEnemy->ApplyDamage(NearEnemy->GetMaxHealth() + 1.0f);
 	TestEqual(TEXT("A dead enemy is not counted as living"), Registry->GetLivingEnemyCount(), 1);
 	TestEqual(TEXT("GetEnemies skips a dead enemy"), Registry->GetEnemies().Num(), 1);
@@ -78,6 +77,8 @@ bool FNightlightActorRegistryTest::RunTest(const FString& Parameters)
 		TEXT("The closest search skips a dead enemy"),
 		Registry->FindClosestEnemy(FVector::ZeroVector, 500.0f) == FarEnemy);
 
+	// A dead defender stays in the list because EndPlay never runs in this world, so the lookups
+	// must skip it themselves.
 	Defender->ApplyDamage(Defender->GetMaxHealth() + 1.0f);
 	TestNull(TEXT("The closest search skips a dead defender"), Registry->FindClosestDefender(FVector::ZeroVector, 250.0f));
 	TestEqual(TEXT("GetDefenders skips a dead defender"), Registry->GetDefenders().Num(), 0);
