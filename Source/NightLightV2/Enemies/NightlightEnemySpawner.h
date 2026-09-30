@@ -46,6 +46,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning")
 	TSubclassOf<ANightlightEnemy> EnemyClass;
 
+	// Temporary until the wave director replaces it: each spawn uses the next class in this list. When the
+	// list is empty the spawner falls back to EnemyClass, so existing levels keep working.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning")
+	TArray<TSubclassOf<ANightlightEnemy>> EnemyClasses;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy Spawning", meta = (ClampMin = "0.1"))
 	float SpawnInterval = 3.0f;
 
@@ -60,5 +65,10 @@ private:
 	// Store the world routes once, then give each enemy its own copy.
 	TArray<TArray<FVector>> CachedRouteWorldLocations;
 	int32 NextRouteIndex = 0;
+	int32 NextEnemyClassIndex = 0;
 	FTimerHandle SpawnTimerHandle;
+
+	// Returns the class for the next spawn and advances the cycle, or null when nothing is assigned.
+	TSubclassOf<ANightlightEnemy> TakeNextEnemyClass();
+	bool HasAnyEnemyClass() const;
 };

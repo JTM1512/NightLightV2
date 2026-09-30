@@ -44,6 +44,7 @@ void ANightlightEnemySpawner::StartSpawning()
 	StopSpawning();
 	CachedRouteWorldLocations.Reset();
 	NextRouteIndex = 0;
+	NextEnemyClassIndex = 0;
 
 	if (!WorldGenerator)
 	{
@@ -51,9 +52,9 @@ void ANightlightEnemySpawner::StartSpawning()
 		return;
 	}
 
-	if (!EnemyClass)
+	if (!HasAnyEnemyClass())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because no Enemy Class is assigned."));
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because no Enemy Class or Enemy Classes are assigned."));
 		return;
 	}
 
@@ -106,7 +107,7 @@ void ANightlightEnemySpawner::StopSpawning()
 
 void ANightlightEnemySpawner::SpawnNextEnemy()
 {
-	if (!EnemyClass || CachedRouteWorldLocations.IsEmpty())
+	if (!HasAnyEnemyClass() || CachedRouteWorldLocations.IsEmpty())
 	{
 		StopSpawning();
 		return;
@@ -122,13 +123,13 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 	}
 
 	// AlwaysSpawn places the enemy on its Rift even when it overlaps the terrain
-	// (Epic Games, Inc., 2026).
+	// (Epic Games, Inc., 2026b).
 	FActorSpawnParameters SpawnParameters;
 	SpawnParameters.Owner = this;
 	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	ANightlightEnemy* Enemy = GetWorld()->SpawnActor<ANightlightEnemy>(
-		EnemyClass,
+		TakeNextEnemyClass(),
 		RoutePoints[0],
 		FRotator::ZeroRotator,
 		SpawnParameters);
@@ -144,10 +145,41 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 	NextRouteIndex = (RouteIndex + 1) % CachedRouteWorldLocations.Num();
 }
 
+bool ANightlightEnemySpawner::HasAnyEnemyClass() const
+{
+	if (EnemyClass)
+	{
+		return true;
+	}
+
+	// A list of empty entries counts as unassigned (Epic Games, Inc., 2026a).
+	return EnemyClasses.ContainsByPredicate([](const TSubclassOf<ANightlightEnemy>& Class) { return Class != nullptr; });
+}
+
+TSubclassOf<ANightlightEnemy> ANightlightEnemySpawner::TakeNextEnemyClass()
+{
+	// Cycle through the list in order, skipping empty entries. The wave director will replace this.
+	for (int32 Attempt = 0; Attempt < EnemyClasses.Num(); ++Attempt)
+	{
+		const int32 ClassIndex = NextEnemyClassIndex % EnemyClasses.Num();
+		NextEnemyClassIndex = (ClassIndex + 1) % EnemyClasses.Num();
+		if (EnemyClasses[ClassIndex])
+		{
+			return EnemyClasses[ClassIndex];
+		}
+	}
+
+	return EnemyClass;
+}
+
 /*
 References
 
-Epic Games, Inc., 2026. UWorld::SpawnActor. [online] Available at:
+Epic Games, Inc., 2026a. TArray::ContainsByPredicate. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TArray/ContainsByPredicate>
+[Accessed 30 September 2026].
+
+Epic Games, Inc., 2026b. UWorld::SpawnActor. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UWorld/SpawnActor>
 [Accessed 31 August 2026].
 */
