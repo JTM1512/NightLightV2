@@ -3,7 +3,11 @@
 #include "../Defenders/NightlightDefender.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
+#include "Components/MeshComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 ANightlightEnemy::ANightlightEnemy()
 {
@@ -40,9 +44,11 @@ void ANightlightEnemy::BeginPlay()
 void ANightlightEnemy::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// EndPlay runs when the enemy dies, reaches the Core or the level ends, so this one call covers
-	// every way an enemy leaves play (Epic Games, Inc., 2026e).
+	// every way an enemy leaves play (Epic Games, Inc., 2026h). A dead enemy has already left the
+	// registry in Die, and a second removal is ignored.
 	if (UWorld* const World = GetWorld())
 	{
+		World->GetTimerManager().ClearTimer(HitFlashTimerHandle);
 		if (UNightlightActorRegistrySubsystem* const Registry = World->GetSubsystem<UNightlightActorRegistrySubsystem>())
 		{
 			Registry->UnregisterEnemy(this);
@@ -117,6 +123,9 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 	OnDamageTaken.Broadcast(AppliedDamage);
 	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth, AppliedDamage);
 
+	// The lethal hit flashes too, so the player sees the blow that killed the enemy.
+	StartHitFlash();
+
 	if (CurrentHealth > 0.0f)
 	{
 		return;
@@ -141,7 +150,7 @@ void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 		FMath::Max(MovementSpeed, 0.0f));
 
 	// VInterpConstantTo stops at the target instead of moving past the waypoint
-	// (Epic Games, Inc., 2026a).
+	// (Epic Games, Inc., 2026b).
 	SetActorLocation(NewLocation);
 
 	const float AcceptanceDistance = FMath::Max(WaypointAcceptanceDistance, 0.0f);
@@ -192,7 +201,7 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 	}
 
 	// Damage starts immediately, then repeats while the same defender remains in range
-	// (Epic Games, Inc., 2026b).
+	// (Epic Games, Inc., 2026c).
 	AttackTargetDefender();
 	if (!IsValid(TargetDefender))
 	{
@@ -211,7 +220,7 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 ANightlightDefender* ANightlightEnemy::FindDefenderTarget()
 {
 	// Every defender type registers itself, so the registry replaces a GetAllActorsOfClass search,
-	// which is slow when there are many actors (Epic Games, Inc., 2026d). Dead defenders are skipped.
+	// which is slow when there are many actors (Epic Games, Inc., 2026f). Dead defenders are skipped.
 	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
 	return Registry ? Registry->FindClosestDefender(GetActorLocation(), DefenderAttackRange) : nullptr;
 }
@@ -232,7 +241,7 @@ void ANightlightEnemy::AttackTargetDefender()
 	}
 
 	// The event fires before the hit so the Blueprint still has a valid defender if this hit
-	// destroys it. Blueprints implement it without any C++ body (Epic Games, Inc., 2026c).
+	// destroys it. Blueprints implement it without any C++ body (Epic Games, Inc., 2026e).
 	OnAttackDefender(TargetDefender);
 	AttackDefender(TargetDefender);
 	if (!IsValid(TargetDefender) || TargetDefender->IsDead())
@@ -301,31 +310,159 @@ void ANightlightEnemy::Die()
 	bIsDead = true;
 	SetActorTickEnabled(false);
 	ClearDefenderTarget();
+
+	// Leave the registry now instead of in EndPlay, so no defender or Core picks this enemy as a
+	// target while its death effect plays.
+	if (UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
+	{
+		Registry->UnregisterEnemy(this);
+	}
+
 	AwardDeathTokens(TokensOnDeath);
 	OnEnemyDied.Broadcast();
-	Destroy();
+
+	// Blueprints spawn their burst or sound here, while the enemy is still in the level.
+	OnDeathEffects();
+	if (DeathRemovalDelay <= 0.0f)
+	{
+		Destroy();
+		return;
+	}
+
+	// Without collision the dying enemy cannot block or catch shots. The life span destroys it once
+	// the delay ends (Epic Games, Inc., 2026a).
+	SetActorEnableCollision(false);
+	SetLifeSpan(DeathRemovalDelay);
+}
+
+void ANightlightEnemy::CreateHitFlashMaterials()
+{
+	bHasCreatedHitFlashMaterials = true;
+
+	TArray<UMeshComponent*> Meshes;
+	GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* const Mesh : Meshes)
+	{
+		// The health bar is a widget component, which is also a mesh component, but it manages its own material.
+		if (!IsValid(Mesh) || Mesh->IsA<UWidgetComponent>())
+		{
+			continue;
+		}
+
+		for (int32 MaterialIndex = 0; MaterialIndex < Mesh->GetNumMaterials(); ++MaterialIndex)
+		{
+			// Only materials with the parameter get a dynamic instance, so the others keep batching together.
+			UMaterialInterface* const Material = Mesh->GetMaterial(MaterialIndex);
+			float StartingFlash = 0.0f;
+			if (!Material || !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(HitFlashParameterName), StartingFlash))
+			{
+				continue;
+			}
+
+			// A parameter can only be changed while playing on a dynamic instance of the material
+			// (Epic Games, Inc., 2026d; Epic Games, Inc., 2026i).
+			if (UMaterialInstanceDynamic* const DynamicMaterial = Mesh->CreateDynamicMaterialInstance(MaterialIndex, Material))
+			{
+				HitFlashMaterials.Add(DynamicMaterial);
+			}
+		}
+	}
+}
+
+void ANightlightEnemy::StartHitFlash()
+{
+	if (HitFlashDuration <= 0.0f || HitFlashParameterName.IsNone())
+	{
+		return;
+	}
+
+	if (!bHasCreatedHitFlashMaterials)
+	{
+		CreateHitFlashMaterials();
+	}
+
+	if (HitFlashMaterials.IsEmpty())
+	{
+		return;
+	}
+
+	// A short flash on impact makes each hit readable, even in a crowd (Swink, 2007).
+	SetHitFlashAmount(1.0f);
+	HitFlashEndTime = GetWorld()->GetTimeSeconds() + HitFlashDuration;
+
+	// A fast repeating timer fades the flash out. A new hit simply restarts it (Epic Games, Inc., 2026c).
+	GetWorldTimerManager().SetTimer(
+		HitFlashTimerHandle,
+		this,
+		&ANightlightEnemy::UpdateHitFlash,
+		0.02f,
+		true);
+}
+
+void ANightlightEnemy::UpdateHitFlash()
+{
+	const float TimeRemaining = HitFlashEndTime - GetWorld()->GetTimeSeconds();
+	if (TimeRemaining <= 0.0f)
+	{
+		SetHitFlashAmount(0.0f);
+		GetWorldTimerManager().ClearTimer(HitFlashTimerHandle);
+		return;
+	}
+
+	SetHitFlashAmount(TimeRemaining / HitFlashDuration);
+}
+
+void ANightlightEnemy::SetHitFlashAmount(const float Amount)
+{
+	for (UMaterialInstanceDynamic* const DynamicMaterial : HitFlashMaterials)
+	{
+		if (IsValid(DynamicMaterial))
+		{
+			// The dynamic instance takes the new value straight away (Epic Games, Inc., 2026g).
+			DynamicMaterial->SetScalarParameterValue(HitFlashParameterName, Amount);
+		}
+	}
 }
 
 /*
 References
 
-Epic Games, Inc., 2026a. FMath::VInterpConstantTo. [online] Available at:
+Epic Games, Inc., 2026a. AActor::SetLifeSpan. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/SetLifeSpan>
+[Accessed 30 September 2026].
+
+Epic Games, Inc., 2026b. FMath::VInterpConstantTo. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/VInterpConstantTo>
 [Accessed 31 August 2026].
 
-Epic Games, Inc., 2026b. Gameplay Timers in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026c. Gameplay Timers in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026c. UFunctions in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026d. Instanced Materials in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/instanced-materials-in-unreal-engine>
+[Accessed 30 September 2026].
+
+Epic Games, Inc., 2026e. UFunctions in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026d. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+Epic Games, Inc., 2026f. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026e. Unreal Engine Actor Lifecycle. [online] Available at:
+Epic Games, Inc., 2026g. UMaterialInstanceDynamic. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UMaterialInstanceDynamic>
+[Accessed 30 September 2026].
+
+Epic Games, Inc., 2026h. Unreal Engine Actor Lifecycle. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-actor-lifecycle>
 [Accessed 29 September 2026].
+
+Epic Games, Inc., 2026i. UPrimitiveComponent. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UPrimitiveComponent>
+[Accessed 30 September 2026].
+
+Swink, S., 2007. Game Feel: The Secret Ingredient. [online] Available at:
+<https://www.gamedeveloper.com/design/game-feel-the-secret-ingredient> [Accessed 30 September 2026].
 */

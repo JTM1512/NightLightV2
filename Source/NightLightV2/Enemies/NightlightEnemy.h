@@ -6,6 +6,7 @@
 #include "NightlightEnemy.generated.h"
 
 class USceneComponent;
+class UMaterialInstanceDynamic;
 class ANightlightDreamCore;
 class ANightlightDefender;
 
@@ -118,6 +119,18 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")
 	bool bIsDead = false;
 
+	// Every mesh material with a scalar parameter of this name flashes when the enemy is hit.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback")
+	FName HitFlashParameterName = TEXT("HitFlash");
+
+	// How long the flash takes to fade from full back to nothing.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
+	float HitFlashDuration = 0.15f;
+
+	// A dead enemy stays in the level this long, without collision, so its death effect can play. Zero removes it at once.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
+	float DeathRemovalDelay = 0.2f;
+
 	// Lets the enemy Blueprint react just before it is removed at the Core.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy", meta = (DisplayName = "On Core Reached"))
 	void OnCoreReached();
@@ -125,6 +138,10 @@ protected:
 	// Lets the enemy Blueprint play an animation or effect on each hit against a defender.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy|Defender Attack", meta = (DisplayName = "On Attack Defender"))
 	void OnAttackDefender(ANightlightDefender* Defender);
+
+	// Lets the enemy Blueprint spawn a burst or play a sound when it dies. It runs before the enemy is removed.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy|Feedback", meta = (DisplayName = "On Death Effects"))
+	void OnDeathEffects();
 
 	// New enemy types override only the steps that differ. The search delay and attack timer stay in this class.
 	virtual void MoveAlongRoute(float DeltaTime);
@@ -158,6 +175,19 @@ private:
 
 	FTimerHandle DefenderAttackTimerHandle;
 	float TimeUntilDefenderSearch = 0.0f;
+
+	// Created on the first hit, so enemies that are never hit keep sharing their original materials.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> HitFlashMaterials;
+
+	bool bHasCreatedHitFlashMaterials = false;
+	FTimerHandle HitFlashTimerHandle;
+	float HitFlashEndTime = 0.0f;
+
+	void CreateHitFlashMaterials();
+	void StartHitFlash();
+	void UpdateHitFlash();
+	void SetHitFlashAmount(float Amount);
 
 	bool UpdateDefenderCombat(float DeltaTime);
 	void AttackTargetDefender();
