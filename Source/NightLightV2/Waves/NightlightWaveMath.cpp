@@ -15,7 +15,7 @@ namespace
 	}
 
 	// Fisher-Yates shuffle: swap each slot, from the back, with a random slot at or before it. The stream
-	// keeps the order the same for the same seed (Epic Games, Inc., 2026a).
+	// keeps the order the same for the same seed (Epic Games, Inc., 2026b).
 	void ShuffleWithStream(TArray<int32>& Entries, FRandomStream& RandomStream)
 	{
 		for (int32 Index = Entries.Num() - 1; Index > 0; --Index)
@@ -78,7 +78,7 @@ float UNightlightWaveMath::CalculateSpawnGap(const UNightlightWaveSettings* Sett
 	}
 
 	// Maps wave 1 to the first gap and the last ramp wave to the final gap. The clamp keeps it flat
-	// after that (Epic Games, Inc., 2026b).
+	// after that (Epic Games, Inc., 2026c).
 	return FMath::GetMappedRangeValueClamped(
 		FVector2f(1.0f, static_cast<float>(Settings->SpawnGapRampWaves)),
 		FVector2f(Settings->FirstWaveSpawnGap, Settings->FinalSpawnGap),
@@ -140,7 +140,7 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 		}
 
 		// Weighted random pick: roll a point along the total weight and find whose slice it lands in. The
-		// stream makes the same seed give the same wave every time (Epic Games, Inc., 2026a).
+		// stream makes the same seed give the same wave every time (Epic Games, Inc., 2026b).
 		const float Roll = RandomStream.FRand() * TotalWeight;
 		int32 PickedSlot = CandidateIndices.Num() - 1;
 		float RunningWeight = 0.0f;
@@ -176,7 +176,7 @@ FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
 	const int32 PeakCount = FMath::Clamp(FMath::RoundToInt(EnemyCount * Settings->PeakShare), 0, EnemyCount - BuildUpCount);
 
 	// Most expensive first. A stable sort keeps equal costs in their planned order, so the split only
-	// depends on the plan and the seed (Epic Games, Inc., 2026c).
+	// depends on the plan and the seed (Epic Games, Inc., 2026d).
 	TArray<int32> SortedEntries = PlannedEntryIndices;
 	SortedEntries.StableSort([Settings](const int32 First, const int32 Second)
 	{
@@ -257,7 +257,7 @@ float UNightlightWaveMath::CalculateClearTimeScore(
 		return 1.0f;
 	}
 
-	// Full marks up to the target, then a straight line down to 0 at twice the target (Epic Games, Inc., 2026b).
+	// Full marks up to the target, then a straight line down to 0 at twice the target (Epic Games, Inc., 2026c).
 	return FMath::GetMappedRangeValueClamped(
 		FVector2f(TargetSeconds, TargetSeconds * 2.0f),
 		FVector2f(1.0f, 0.0f),
@@ -327,6 +327,41 @@ float UNightlightWaveMath::UpdateAdaptiveFactor(
 	return FMath::Clamp(NewAdaptiveFactor, Settings->MinAdaptiveFactor, Settings->MaxAdaptiveFactor);
 }
 
+float UNightlightWaveMath::CalculateChallengeLevel(
+	const UNightlightWaveSettings* Settings,
+	const float CoreDamageFraction,
+	const int32 DefendersLost,
+	const int32 EnemiesNearCore)
+{
+	Settings = GetSettingsOrDefault(Settings);
+
+	// Each input as a share of its "full pressure" value, so one large input cannot outweigh the others.
+	const TPair<float, float> WeightedInputs[] = {
+		{ CoreDamageFraction / FMath::Max(Settings->CoreDamageForFullChallenge, KINDA_SMALL_NUMBER), Settings->CoreDamageChallengeWeight },
+		{ static_cast<float>(DefendersLost) / FMath::Max(Settings->DefendersLostForFullChallenge, 1), Settings->DefendersLostChallengeWeight },
+		{ static_cast<float>(EnemiesNearCore) / FMath::Max(Settings->EnemiesNearCoreForFullChallenge, 1), Settings->EnemiesNearCoreChallengeWeight } };
+
+	float WeightedTotal = 0.0f;
+	float TotalWeight = 0.0f;
+	for (const TPair<float, float>& Input : WeightedInputs)
+	{
+		if (Input.Value > 0.0f)
+		{
+			WeightedTotal += FMath::Clamp(Input.Key, 0.0f, 1.0f) * Input.Value;
+			TotalWeight += Input.Value;
+		}
+	}
+
+	return TotalWeight > 0.0f ? WeightedTotal / TotalWeight * 100.0f : 0.0f;
+}
+
+void UNightlightWaveMath::MovePhaseEnemiesToFront(TArray<int32>& FromPhase, TArray<int32>& ToPhase)
+{
+	// Inserting the whole list at index 0 keeps both orders, so the moved enemies spawn next (Epic Games, Inc., 2026a).
+	ToPhase.Insert(FromPhase, 0);
+	FromPhase.Reset();
+}
+
 /*
 References
 
@@ -336,19 +371,23 @@ Booth, M., 2009. The AI systems of Left 4 Dead. [pdf] Bellevue: Valve Corporatio
 Chen, J., 2007. Flow in games (and everything else). Communications of the ACM, [e-journal] 50(4), pp.31-34. Available at:
 <https://khoury.northeastern.edu/~lieber/courses/csu670/f08/materials/p31-chen-flow-in-games.pdf> [Accessed 30 September 2026].
 
-Epic Games, Inc., 2026a. FRandomStream. [online] Available at:
+Epic Games, Inc., 2026a. Array Containers in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/array-containers-in-unreal-engine>
+[Accessed 1 October 2026].
+
+Epic Games, Inc., 2026b. FRandomStream. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FRandomStream>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026b. GetMappedRangeValueClamped. [online] Available at:
+Epic Games, Inc., 2026c. GetMappedRangeValueClamped. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/GetMappedRangeValueClamped>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026c. TArray::StableSort. [online] Available at:
+Epic Games, Inc., 2026d. TArray::StableSort. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TArray/StableSort>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026d. UBlueprintFunctionLibrary. [online] Available at:
+Epic Games, Inc., 2026e. UBlueprintFunctionLibrary. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UBlueprintFunctionLibrary>
 [Accessed 1 October 2026].
 

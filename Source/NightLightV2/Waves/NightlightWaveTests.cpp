@@ -277,6 +277,43 @@ bool FNightlightWaveAdaptationTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWaveChallengeTest,
+	"Nightlight.Waves.Challenge",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWaveChallengeTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+
+	// Full pressure is a fifth of the Core lost, 2 defenders lost or 4 enemies near the Core.
+	TestEqual(TEXT("Nothing happening gives 0"), UNightlightWaveMath::CalculateChallengeLevel(Settings, 0.0f, 0, 0), 0.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("All three inputs at full gives 100"), UNightlightWaveMath::CalculateChallengeLevel(Settings, 0.2f, 2, 4), 100.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Inputs above full stay at 100"), UNightlightWaveMath::CalculateChallengeLevel(Settings, 0.9f, 7, 20), 100.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Half the Core damage alone gives about 17"), UNightlightWaveMath::CalculateChallengeLevel(Settings, 0.1f, 0, 0), 100.0f / 6.0f, 0.01f);
+	TestEqual(TEXT("Half the defenders lost alone gives about 17"), UNightlightWaveMath::CalculateChallengeLevel(Settings, 0.0f, 1, 0), 100.0f / 6.0f, 0.01f);
+	TestEqual(TEXT("Half the enemies near the Core alone gives about 17"), UNightlightWaveMath::CalculateChallengeLevel(Settings, 0.0f, 0, 2), 100.0f / 6.0f, 0.01f);
+	TestEqual(TEXT("A null settings asset uses the same defaults"), UNightlightWaveMath::CalculateChallengeLevel(nullptr, 0.2f, 2, 4), 100.0f, KINDA_SMALL_NUMBER);
+
+	// Moving the rest of build-up onto the front of the peak keeps both orders and every enemy exactly once.
+	TArray<int32> BuildUp = { 0, 0, 1 };
+	TArray<int32> Peak = { 2, 1 };
+	TArray<int32> Expected = BuildUp;
+	Expected.Append(Peak);
+	UNightlightWaveMath::MovePhaseEnemiesToFront(BuildUp, Peak);
+	TestTrue(TEXT("The moved enemies spawn first, in their old order"), Peak == Expected);
+	TestTrue(TEXT("The phase they left is empty"), BuildUp.IsEmpty());
+
+	TArray<int32> EmptyPhase;
+	TArray<int32> Relief = { 1 };
+	UNightlightWaveMath::MovePhaseEnemiesToFront(EmptyPhase, Relief);
+	TestTrue(TEXT("Moving an empty phase changes nothing"), Relief == TArray<int32>({ 1 }));
+
+	return true;
+}
+
 #endif
 
 /*

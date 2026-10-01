@@ -88,7 +88,7 @@ struct NIGHTLIGHTV2_API FNightlightWaveMeasures
 };
 
 // The wave maths on its own, so the wave director stays small and the tests can call it directly
-// (Epic Games, Inc., 2026d). A null Settings uses the C++ defaults from the planning document.
+// (Epic Games, Inc., 2026e). A null Settings uses the C++ defaults from the planning document.
 UCLASS()
 class NIGHTLIGHTV2_API UNightlightWaveMath : public UBlueprintFunctionLibrary
 {
@@ -157,4 +157,19 @@ public:
 	// Raises A by one step after a high score and lowers it after a low score, kept between the min and max.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	static float UpdateAdaptiveFactor(const UNightlightWaveSettings* Settings, float CurrentAdaptiveFactor, float PlayerScore);
+
+	// The live challenge level from 0 (coasting) to 100 (struggling). Each input is divided by its "full" value
+	// from Settings and clamped to 0 to 1, then the three are weighted. CoreDamageFraction is the share of the
+	// Core's max health lost inside the window.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculateChallengeLevel(
+		const UNightlightWaveSettings* Settings,
+		float CoreDamageFraction,
+		int32 DefendersLost,
+		int32 EnemiesNearCore);
+
+	// Moves every enemy left in FromPhase onto the front of ToPhase, keeping their order, and empties FromPhase.
+	// Enemies are only moved, never removed, so the wave still spawns its whole budget.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static void MovePhaseEnemiesToFront(UPARAM(ref) TArray<int32>& FromPhase, UPARAM(ref) TArray<int32>& ToPhase);
 };

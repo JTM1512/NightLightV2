@@ -168,4 +168,47 @@ public:
 	// Build-up and relief spawn at the wave's spawn gap times this, so they feel slower.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "1.0"))
 	float OffPeakGapMultiplier = 1.75f;
+
+	// How far back the live challenge level looks when it counts Core damage and defenders lost.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "1.0"))
+	float ChallengeWindowSeconds = 10.0f;
+
+	// Seconds between challenge level checks while a wave runs.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.1"))
+	float ChallengeCheckInterval = 1.0f;
+
+	// Above this the player is struggling, so spawns are held back or the wave moves to relief early.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float HighChallengeThreshold = 70.0f;
+
+	// Below this during build-up the player is coasting, so the peak starts early.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float LowChallengeThreshold = 30.0f;
+
+	// How much each input counts towards the challenge level. They are divided by their total, so equal
+	// values give equal weight.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0"))
+	float CoreDamageChallengeWeight = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0"))
+	float DefendersLostChallengeWeight = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0"))
+	float EnemiesNearCoreChallengeWeight = 1.0f;
+
+	// The share of the Core's max health lost inside the window that counts as full pressure.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.01", ClampMax = "1.0"))
+	float CoreDamageForFullChallenge = 0.2f;
+
+	// Defenders destroyed inside the window that count as full pressure.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "1"))
+	int32 DefendersLostForFullChallenge = 2;
+
+	// Enemies inside the Core's attack range that count as full pressure.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "1"))
+	int32 EnemiesNearCoreForFullChallenge = 4;
+
+	// How long spawns may be held while the challenge stays high before the wave moves to relief instead.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0"))
+	float MaxHoldSeconds = 6.0f;
 };

@@ -7,6 +7,7 @@
 #include "NightlightWaveMath.h"
 #include "NightlightWaveDirector.generated.h"
 
+class ANightlightDefender;
 class ANightlightEnemy;
 class ANightlightEnemySpawner;
 class ANightlightDreamCore;
@@ -75,9 +76,42 @@ struct NIGHTLIGHTV2_API FNightlightWaveSummary
 	// A for the next wave, after the score nudged it.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	float AdaptiveFactorAfter = 1.0f;
+
+	// Seconds the live challenge level held spawns back during the wave.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float HeldSeconds = 0.0f;
+
+	// The player was struggling for too long, so the wave moved to relief before its peak finished.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	bool bReliefCameEarly = false;
+
+	// The player was coasting, so the peak started before build-up finished.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	bool bPeakCameEarly = false;
+
+	// The highest live challenge level reached during the wave, from 0 to 100.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float HighestChallengeLevel = 0.0f;
 };
 
-// Dynamic so the wave HUD Blueprint can bind to them (Epic Games, Inc., 2026a).
+// How the director changed the pacing after a challenge level check.
+UENUM(BlueprintType)
+enum class ENightlightChallengeReaction : uint8
+{
+	// The player is struggling, so the spawn timer is paused.
+	HeldSpawns,
+
+	// The challenge dropped back down, so spawning carries on.
+	ResumedSpawns,
+
+	// Spawns were held for too long, so the rest of the phase moved into relief.
+	ReliefEarly,
+
+	// The player is coasting, so the rest of build-up moved into the peak.
+	PeakEarly
+};
+
+// Dynamic so the wave HUD Blueprint can bind to them (Epic Games, Inc., 2026b).
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FNightlightBuildPhaseStartedSignature,
 	int32, NextWaveNumber,
@@ -95,6 +129,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FNightlightWaveClearedSignature,
 	const FNightlightWaveSummary&, Summary);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNightlightWavesStoppedSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FNightlightChallengeReactionSignature,
+	ENightlightChallengeReaction, Reaction);
 
 // Runs the wave loop: a build phase with a countdown, then a planned wave spawned in build-up, peak and relief,
 // then the next build phase once every enemy from that wave is gone (Booth, 2009).
@@ -143,6 +180,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	float GetAdaptiveFactor() const { return AdaptiveFactor; }
 
+	// The live challenge level from the last check, from 0 (coasting) to 100 (struggling). 0 outside a wave.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	float GetChallengeLevel() const { return ChallengeLevel; }
+
 	// The player's tokens at the end of a wave, for the skill score. C++ returns -1 (unknown), so the measure
 	// is left out; BP_NightlightWaveDirector overrides this to read the token pool in the game state.
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Nightlight|Waves")
@@ -168,6 +209,10 @@ public:
 	// Fires once when the Core is destroyed. No more waves run after it.
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Waves")
 	FNightlightWavesStoppedSignature OnWavesStopped;
+
+	// Fires when the challenge level holds or resumes spawns, or brings relief or the peak forward.
+	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Waves")
+	FNightlightChallengeReactionSignature OnChallengeReaction;
 
 protected:
 	virtual void BeginPlay() override;
@@ -200,6 +245,7 @@ private:
 	FRandomStream WaveRandomStream;
 	FTimerHandle BuildPhaseTimerHandle;
 	FTimerHandle SpawnTimerHandle;
+	FTimerHandle ChallengeTimerHandle;
 	ENightlightWavePhase WavePhase = ENightlightWavePhase::NotStarted;
 	int32 CurrentWaveNumber = 0;
 	int32 CurrentWaveBudget = 0;
@@ -219,6 +265,24 @@ private:
 	// A in the budget formula, nudged after each wave by the player's score.
 	float AdaptiveFactor = 1.0f;
 
+	// When the Core lost health in this wave and how much, as a share of its max health. Entries older than
+	// the challenge window are dropped on each check.
+	TArray<float> CoreDamageTimes;
+	TArray<float> CoreDamageFractions;
+
+	// When each defender was destroyed in this wave.
+	TArray<float> DefenderLostTimes;
+
+	// The Core's health at the last change, so each change can be stored as a drop.
+	float LastKnownCoreHealth = 0.0f;
+
+	float ChallengeLevel = 0.0f;
+	float HighestChallengeLevel = 0.0f;
+	bool bSpawnsHeld = false;
+	float HoldStartTime = 0.0f;
+	bool bReliefCameEarly = false;
+	bool bPeakCameEarly = false;
+
 	FNightlightWaveInfo CurrentWaveInfo;
 	FNightlightWaveSummary LastWaveSummary;
 
@@ -234,10 +298,21 @@ private:
 	void BroadcastEnemiesRemaining();
 	bool HasEnemiesToSpawn() const;
 	TArray<int32>* GetPhaseEnemies(ENightlightWavePhase Phase);
+	bool IsWaveRunning() const;
+	void UpdateChallengeLevel();
+	void HoldSpawns();
+	void EndHold();
+	void ReactToChallengeLevel();
 
 	UFUNCTION()
 	void HandleEnemyRemoved(ANightlightEnemy* Enemy);
 
 	UFUNCTION()
 	void HandleCoreDestroyed();
+
+	UFUNCTION()
+	void HandleCoreHealthChanged(float CurrentHealth, float MaxHealth);
+
+	UFUNCTION()
+	void HandleDefenderRemoved(ANightlightDefender* Defender);
 };
