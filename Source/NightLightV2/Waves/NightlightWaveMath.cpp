@@ -218,6 +218,115 @@ float UNightlightWaveMath::GetPhaseSpawnGap(
 	return Phase == ENightlightWavePhase::Peak ? PeakGap : PeakGap * Settings->OffPeakGapMultiplier;
 }
 
+float UNightlightWaveMath::CalculatePlannedSpawnSeconds(
+	const UNightlightWaveSettings* Settings,
+	const int32 WaveNumber,
+	const FNightlightWavePhaseLists& PhaseLists)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	float Seconds = 0.0f;
+	float LastGap = 0.0f;
+
+	const TPair<const TArray<int32>*, ENightlightWavePhase> Phases[] = {
+		{ &PhaseLists.BuildUp, ENightlightWavePhase::BuildUp },
+		{ &PhaseLists.Peak, ENightlightWavePhase::Peak },
+		{ &PhaseLists.Relief, ENightlightWavePhase::Relief } };
+
+	for (const TPair<const TArray<int32>*, ENightlightWavePhase>& Phase : Phases)
+	{
+		if (!Phase.Key->IsEmpty())
+		{
+			LastGap = GetPhaseSpawnGap(Settings, WaveNumber, Phase.Value);
+			Seconds += Phase.Key->Num() * LastGap;
+		}
+	}
+
+	// Nothing waits after the very last enemy, so its gap is taken off again.
+	return FMath::Max(Seconds - LastGap, 0.0f);
+}
+
+float UNightlightWaveMath::CalculateClearTimeScore(
+	const UNightlightWaveSettings* Settings,
+	const float ClearSeconds,
+	const float TargetSpawnSeconds)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	const float TargetSeconds = FMath::Max(TargetSpawnSeconds, 0.0f) + Settings->ClearTimeGraceSeconds;
+	if (TargetSeconds <= 0.0f)
+	{
+		return 1.0f;
+	}
+
+	// Full marks up to the target, then a straight line down to 0 at twice the target (Epic Games, Inc., 2026b).
+	return FMath::GetMappedRangeValueClamped(
+		FVector2f(TargetSeconds, TargetSeconds * 2.0f),
+		FVector2f(1.0f, 0.0f),
+		ClearSeconds);
+}
+
+float UNightlightWaveMath::CalculateUnspentTokensScore(const UNightlightWaveSettings* Settings, const int32 UnspentTokens)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	if (UnspentTokens < 0)
+	{
+		return -1.0f;
+	}
+
+	const float Score = FMath::Clamp(static_cast<float>(UnspentTokens) / FMath::Max(Settings->TokensForFullScore, 1), 0.0f, 1.0f);
+	return Settings->bSpareTokensRaiseScore ? Score : 1.0f - Score;
+}
+
+float UNightlightWaveMath::CalculatePlayerScore(const UNightlightWaveSettings* Settings, const FNightlightWaveMeasures& Measures)
+{
+	Settings = GetSettingsOrDefault(Settings);
+
+	// Each measure with its weight. Unavailable measures are skipped and the rest are divided by their own
+	// total weight, so leaving one out does not drag the score down.
+	const TPair<float, float> WeightedMeasures[] = {
+		{ Measures.CoreHealthKept, Settings->CoreHealthWeight },
+		{ Measures.EnemiesStopped, Settings->EnemiesStoppedWeight },
+		{ Measures.ClearTime, Settings->ClearTimeWeight },
+		{ Measures.UnspentTokens, Settings->UnspentTokensWeight } };
+
+	float WeightedTotal = 0.0f;
+	float TotalWeight = 0.0f;
+	for (const TPair<float, float>& Measure : WeightedMeasures)
+	{
+		if (Measure.Key >= 0.0f && Measure.Value > 0.0f)
+		{
+			WeightedTotal += FMath::Clamp(Measure.Key, 0.0f, 1.0f) * Measure.Value;
+			TotalWeight += Measure.Value;
+		}
+	}
+
+	// Halfway between the thresholds, so a wave with nothing to measure never changes A.
+	return TotalWeight > 0.0f
+		? WeightedTotal / TotalWeight
+		: (Settings->RaiseScoreThreshold + Settings->LowerScoreThreshold) * 0.5f;
+}
+
+float UNightlightWaveMath::UpdateAdaptiveFactor(
+	const UNightlightWaveSettings* Settings,
+	const float CurrentAdaptiveFactor,
+	const float PlayerScore)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	float NewAdaptiveFactor = CurrentAdaptiveFactor;
+
+	// One small step at a time, and only between waves, so the player does not notice the game adjusting
+	// to them (Hunicke and Chapman, 2004).
+	if (PlayerScore > Settings->RaiseScoreThreshold)
+	{
+		NewAdaptiveFactor += Settings->AdaptiveStep;
+	}
+	else if (PlayerScore < Settings->LowerScoreThreshold)
+	{
+		NewAdaptiveFactor -= Settings->AdaptiveStep;
+	}
+
+	return FMath::Clamp(NewAdaptiveFactor, Settings->MinAdaptiveFactor, Settings->MaxAdaptiveFactor);
+}
+
 /*
 References
 
@@ -242,4 +351,7 @@ Epic Games, Inc., 2026c. TArray::StableSort. [online] Available at:
 Epic Games, Inc., 2026d. UBlueprintFunctionLibrary. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UBlueprintFunctionLibrary>
 [Accessed 1 October 2026].
+
+Hunicke, R. and Chapman, V., 2004. AI for dynamic difficulty adjustment in games. [pdf] Evanston: Northwestern University. Available at:
+<https://users.cs.northwestern.edu/~hunicke/pubs/Hamlet.pdf> [Accessed 30 September 2026].
 */

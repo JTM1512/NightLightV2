@@ -217,6 +217,66 @@ bool FNightlightWavePhasesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWaveAdaptationTest,
+	"Nightlight.Waves.Adaptation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWaveAdaptationTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+	const auto MakeMeasures = [](const float CoreHealth, const float Stopped, const float ClearTime, const float Tokens)
+	{
+		FNightlightWaveMeasures Measures;
+		Measures.CoreHealthKept = CoreHealth;
+		Measures.EnemiesStopped = Stopped;
+		Measures.ClearTime = ClearTime;
+		Measures.UnspentTokens = Tokens;
+		return Measures;
+	};
+
+	// Above 0.7 raises A by 0.1, below 0.4 lowers it by 0.1 and anything between leaves it.
+	const float PerfectScore = UNightlightWaveMath::CalculatePlayerScore(Settings, MakeMeasures(1.0f, 1.0f, 1.0f, 1.0f));
+	const float PoorScore = UNightlightWaveMath::CalculatePlayerScore(Settings, MakeMeasures(0.0f, 0.2f, 0.0f, 0.1f));
+	const float MiddleScore = UNightlightWaveMath::CalculatePlayerScore(Settings, MakeMeasures(0.5f, 0.5f, 0.5f, 0.5f));
+	TestEqual(TEXT("Perfect measures score 1"), PerfectScore, 1.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Perfect measures raise A by 0.1"), UNightlightWaveMath::UpdateAdaptiveFactor(Settings, 1.0f, PerfectScore), 1.1f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Poor measures lower A by 0.1"), UNightlightWaveMath::UpdateAdaptiveFactor(Settings, 1.0f, PoorScore), 0.9f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("A middle score leaves A alone"), UNightlightWaveMath::UpdateAdaptiveFactor(Settings, 1.0f, MiddleScore), 1.0f, KINDA_SMALL_NUMBER);
+
+	// Many good or bad waves in a row never push A past its limits.
+	float HighA = 1.0f;
+	float LowA = 1.0f;
+	for (int32 Wave = 0; Wave < 30; ++Wave)
+	{
+		HighA = UNightlightWaveMath::UpdateAdaptiveFactor(Settings, HighA, PerfectScore);
+		LowA = UNightlightWaveMath::UpdateAdaptiveFactor(Settings, LowA, PoorScore);
+	}
+	TestEqual(TEXT("A stops at 1.35 after many good waves"), HighA, 1.35f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("A stops at 0.75 after many bad waves"), LowA, 0.75f, KINDA_SMALL_NUMBER);
+
+	// An unavailable measure is left out and the other weights share its place.
+	TestEqual(TEXT("Unknown tokens are left out"), UNightlightWaveMath::CalculatePlayerScore(Settings, MakeMeasures(1.0f, 1.0f, 1.0f, -1.0f)), 1.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Two unknown measures leave an average of the other two"), UNightlightWaveMath::CalculatePlayerScore(Settings, MakeMeasures(1.0f, 0.0f, -1.0f, -1.0f)), 0.5f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Unknown tokens score -1"), UNightlightWaveMath::CalculateUnspentTokensScore(Settings, -1), -1.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("50 of 100 tokens scores 0.5"), UNightlightWaveMath::CalculateUnspentTokensScore(Settings, 50), 0.5f, KINDA_SMALL_NUMBER);
+
+	// 5 seconds of spawning plus 10 seconds of grace gives a 15 second target.
+	TestEqual(TEXT("Clearing inside the grace scores 1"), UNightlightWaveMath::CalculateClearTimeScore(Settings, 12.0f, 5.0f), 1.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Clearing halfway to twice the target scores 0.5"), UNightlightWaveMath::CalculateClearTimeScore(Settings, 22.5f, 5.0f), 0.5f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Clearing at twice the target scores 0"), UNightlightWaveMath::CalculateClearTimeScore(Settings, 30.0f, 5.0f), 0.0f, KINDA_SMALL_NUMBER);
+
+	// Wave 1 at 2 seconds a peak gap: 4 build-up enemies at 3.5 s, then 4 peak enemies at 2 s, less the last gap.
+	FNightlightWavePhaseLists PhaseLists;
+	PhaseLists.BuildUp = { 0, 0, 0, 0 };
+	PhaseLists.Peak = { 0, 0, 0, 0 };
+	TestEqual(TEXT("Planned spawning time follows the phase gaps"), UNightlightWaveMath::CalculatePlannedSpawnSeconds(Settings, 1, PhaseLists), 20.0f, KINDA_SMALL_NUMBER);
+
+	return true;
+}
+
 #endif
 
 /*

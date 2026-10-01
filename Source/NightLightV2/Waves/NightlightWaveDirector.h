@@ -12,7 +12,7 @@ class ANightlightEnemySpawner;
 class ANightlightDreamCore;
 class UNightlightWaveSettings;
 
-// What the HUD shows when a wave starts. Later sprints only add fields here, so Blueprint bindings never break.
+// What the HUD shows when a wave starts. Fields are only ever added here, so Blueprint bindings never break.
 USTRUCT(BlueprintType)
 struct NIGHTLIGHTV2_API FNightlightWaveInfo
 {
@@ -34,7 +34,7 @@ struct NIGHTLIGHTV2_API FNightlightWaveInfo
 	FName TemplateName;
 };
 
-// How the last wave went. Later sprints only add fields here, so Blueprint bindings never break.
+// How the last wave went. Fields are only ever added here, so Blueprint bindings never break.
 USTRUCT(BlueprintType)
 struct NIGHTLIGHTV2_API FNightlightWaveSummary
 {
@@ -59,6 +59,22 @@ struct NIGHTLIGHTV2_API FNightlightWaveSummary
 
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	int32 ThreatBudget = 0;
+
+	// The four measures the score was built from. Negative ones were not available.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	FNightlightWaveMeasures Measures;
+
+	// 0 (played badly) to 1 (played well).
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float PlayerScore = 0.0f;
+
+	// A for the wave that just ended.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float AdaptiveFactorBefore = 1.0f;
+
+	// A for the next wave, after the score nudged it.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float AdaptiveFactorAfter = 1.0f;
 };
 
 // Dynamic so the wave HUD Blueprint can bind to them (Epic Games, Inc., 2026a).
@@ -123,6 +139,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	FNightlightWaveSummary GetLastWaveSummary() const { return LastWaveSummary; }
 
+	// A in the budget formula: above 1 makes waves bigger, below 1 makes them smaller.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	float GetAdaptiveFactor() const { return AdaptiveFactor; }
+
+	// The player's tokens at the end of a wave, for the skill score. C++ returns -1 (unknown), so the measure
+	// is left out; BP_NightlightWaveDirector overrides this to read the token pool in the game state.
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Nightlight|Waves")
+	int32 GetUnspentTokens() const;
+
 	// Passes the number of the coming wave and the length of the countdown.
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Waves")
 	FNightlightBuildPhaseStartedSignature OnBuildPhaseStarted;
@@ -160,7 +185,7 @@ protected:
 	bool bStartOnBeginPlay = true;
 
 private:
-	// Settings->Enemies indices still to spawn in each phase. Kept as members so a later sprint can move
+	// Settings->Enemies indices still to spawn in each phase. Kept as members so the challenge level can move
 	// enemies between phases while the wave runs.
 	TArray<int32> BuildUpEnemies;
 	TArray<int32> PeakEnemies;
@@ -182,8 +207,16 @@ private:
 	int32 EnemiesSpawnedThisWave = 0;
 	int32 EnemiesStoppedThisWave = 0;
 	float WaveStartTime = 0.0f;
+	float CoreHealthAtWaveStart = 0.0f;
 
-	// A in the budget formula. It stays at its starting value until the skill score is added.
+	// How long the planned phases take to spawn, the base of the clear time target.
+	float PlannedSpawnSeconds = 0.0f;
+
+	// Seconds the in-wave challenge level held spawns back. Added to the clear time target, so a held wave is
+	// not marked down for clearing slowly.
+	float HeldSpawnSeconds = 0.0f;
+
+	// A in the budget formula, nudged after each wave by the player's score.
 	float AdaptiveFactor = 1.0f;
 
 	FNightlightWaveInfo CurrentWaveInfo;
@@ -195,6 +228,7 @@ private:
 	void StartPhase(ENightlightWavePhase Phase);
 	void SpawnNextPhaseEnemy();
 	void TryFinishWave();
+	FNightlightWaveMeasures BuildWaveMeasures(float ClearSeconds) const;
 	void StopWaves();
 	void SetWavePhase(ENightlightWavePhase NewPhase);
 	void BroadcastEnemiesRemaining();

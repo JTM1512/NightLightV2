@@ -158,6 +158,9 @@ void ANightlightWaveDirector::StartWave()
 	EnemiesSpawnedThisWave = 0;
 	EnemiesStoppedThisWave = 0;
 	WaveStartTime = GetWorld()->GetTimeSeconds();
+	CoreHealthAtWaveStart = IsValid(BoundDreamCore) ? BoundDreamCore->GetCurrentHealth() : 0.0f;
+	PlannedSpawnSeconds = UNightlightWaveMath::CalculatePlannedSpawnSeconds(Settings, CurrentWaveNumber, PhaseLists);
+	HeldSpawnSeconds = 0.0f;
 
 	CurrentWaveInfo = FNightlightWaveInfo();
 	CurrentWaveInfo.WaveNumber = CurrentWaveNumber;
@@ -229,7 +232,7 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 	const int32 RouteCount = EnemySpawner ? EnemySpawner->GetRouteCount() : 0;
 	if (Settings->Enemies.IsValidIndex(EntryIndex) && RouteCount > 0)
 	{
-		// Routes are taken in turn for now. Sprint 5 replaces this with weighted route picks.
+		// Routes are taken in turn until the weighted route picks are added.
 		const int32 RouteIndex = NextRouteIndex % RouteCount;
 		NextRouteIndex = (RouteIndex + 1) % RouteCount;
 
@@ -285,6 +288,15 @@ void ANightlightWaveDirector::TryFinishWave()
 	LastWaveSummary.EnemiesStopped = EnemiesStoppedThisWave;
 	LastWaveSummary.ClearSeconds = GetWorld()->GetTimeSeconds() - WaveStartTime;
 	LastWaveSummary.ThreatBudget = CurrentWaveBudget;
+
+	// Score how the player handled the wave and nudge A, which scales the next wave's budget
+	// (Hunicke and Chapman, 2004).
+	const UNightlightWaveSettings* const Settings = GetSettings();
+	LastWaveSummary.Measures = BuildWaveMeasures(LastWaveSummary.ClearSeconds);
+	LastWaveSummary.PlayerScore = UNightlightWaveMath::CalculatePlayerScore(Settings, LastWaveSummary.Measures);
+	LastWaveSummary.AdaptiveFactorBefore = AdaptiveFactor;
+	AdaptiveFactor = UNightlightWaveMath::UpdateAdaptiveFactor(Settings, AdaptiveFactor, LastWaveSummary.PlayerScore);
+	LastWaveSummary.AdaptiveFactorAfter = AdaptiveFactor;
 	OnWaveCleared.Broadcast(LastWaveSummary);
 
 	// Build-up, peak, then a calm build phase before the next wave (Booth, 2009).
@@ -292,6 +304,35 @@ void ANightlightWaveDirector::TryFinishWave()
 	{
 		StartBuildPhase(GetSettings()->BuildPhaseSeconds);
 	}
+}
+
+FNightlightWaveMeasures ANightlightWaveDirector::BuildWaveMeasures(const float ClearSeconds) const
+{
+	const UNightlightWaveSettings* const Settings = GetSettings();
+	FNightlightWaveMeasures Measures;
+
+	// Each measure stays at -1 (left out) when there is nothing to divide by.
+	if (IsValid(BoundDreamCore) && CoreHealthAtWaveStart > 0.0f)
+	{
+		Measures.CoreHealthKept = FMath::Clamp(BoundDreamCore->GetCurrentHealth() / CoreHealthAtWaveStart, 0.0f, 1.0f);
+	}
+
+	if (EnemiesSpawnedThisWave > 0)
+	{
+		Measures.EnemiesStopped = static_cast<float>(EnemiesStoppedThisWave) / EnemiesSpawnedThisWave;
+	}
+
+	// Held seconds are added to the target, so a wave the challenge level slowed down is not marked down.
+	Measures.ClearTime = UNightlightWaveMath::CalculateClearTimeScore(Settings, ClearSeconds, PlannedSpawnSeconds + HeldSpawnSeconds);
+	Measures.UnspentTokens = UNightlightWaveMath::CalculateUnspentTokensScore(Settings, GetUnspentTokens());
+	return Measures;
+}
+
+int32 ANightlightWaveDirector::GetUnspentTokens_Implementation() const
+{
+	// The token pool lives in the Blueprint game state, so C++ cannot read it. The Blueprint child overrides
+	// this native event to return it (Epic Games, Inc., 2026g).
+	return -1;
 }
 
 void ANightlightWaveDirector::StopWaves()
@@ -394,4 +435,11 @@ Epic Games, Inc., 2026e. Programming Subsystems in Unreal Engine. [online] Avail
 Epic Games, Inc., 2026f. TWeakObjectPtr. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TWeakObjectPtr>
 [Accessed 1 October 2026].
+
+Epic Games, Inc., 2026g. UFunctions in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
+[Accessed 1 October 2026].
+
+Hunicke, R. and Chapman, V., 2004. AI for dynamic difficulty adjustment in games. [pdf] Evanston: Northwestern University. Available at:
+<https://users.cs.northwestern.edu/~hunicke/pubs/Hamlet.pdf> [Accessed 30 September 2026].
 */

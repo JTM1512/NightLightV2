@@ -6,7 +6,7 @@
 #include "NightlightWaveSettings.h"
 #include "NightlightWaveMath.generated.h"
 
-// Multipliers on each role's base weight. Sprint 5 fills these in from the player's defender layout.
+// Multipliers on each role's base weight. The play-style counters fill these in from the player's defender layout.
 USTRUCT(BlueprintType)
 struct NIGHTLIGHTV2_API FNightlightEnemyMixWeights
 {
@@ -63,6 +63,30 @@ struct NIGHTLIGHTV2_API FNightlightWavePhaseLists
 	TArray<int32> Relief;
 };
 
+// The four between-wave measures, each already turned into 0 (played badly) to 1 (played well). A negative
+// value means the measure was not available, so the score leaves it out.
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightWaveMeasures
+{
+	GENERATED_BODY()
+
+	// Core health at the end of the wave divided by its health at the start.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float CoreHealthKept = -1.0f;
+
+	// Enemies that died before the Core divided by enemies spawned.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float EnemiesStopped = -1.0f;
+
+	// 1 when the wave was cleared quickly, falling to 0 when it took twice as long.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float ClearTime = -1.0f;
+
+	// Tokens left unspent at the end of the wave, compared with Settings->TokensForFullScore.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float UnspentTokens = -1.0f;
+};
+
 // The wave maths on its own, so the wave director stays small and the tests can call it directly
 // (Epic Games, Inc., 2026d). A null Settings uses the C++ defaults from the planning document.
 UCLASS()
@@ -106,4 +130,31 @@ public:
 	// The wave's spawn gap for the peak, and that gap times OffPeakGapMultiplier for every other phase.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	static float GetPhaseSpawnGap(const UNightlightWaveSettings* Settings, int32 WaveNumber, ENightlightWavePhase Phase);
+
+	// Seconds the director takes to spawn these phase lists at their gaps. Each phase waits one gap after its
+	// last enemy before the next phase starts, and the wave's final spawn ends the count.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculatePlannedSpawnSeconds(
+		const UNightlightWaveSettings* Settings,
+		int32 WaveNumber,
+		const FNightlightWavePhaseLists& PhaseLists);
+
+	// 1 when the wave cleared within TargetSpawnSeconds + ClearTimeGraceSeconds, falling in a straight line
+	// to 0 at twice that.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculateClearTimeScore(const UNightlightWaveSettings* Settings, float ClearSeconds, float TargetSpawnSeconds);
+
+	// Unspent tokens divided by TokensForFullScore, clamped to 0 to 1. A negative token count is unknown and
+	// returns -1, so the measure is left out.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculateUnspentTokensScore(const UNightlightWaveSettings* Settings, int32 UnspentTokens);
+
+	// The weighted average of the available measures, from 0 to 1. With none available it returns a middle
+	// score, so the adaptive factor is left alone.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculatePlayerScore(const UNightlightWaveSettings* Settings, const FNightlightWaveMeasures& Measures);
+
+	// Raises A by one step after a high score and lowers it after a low score, kept between the min and max.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float UpdateAdaptiveFactor(const UNightlightWaveSettings* Settings, float CurrentAdaptiveFactor, float PlayerScore);
 };

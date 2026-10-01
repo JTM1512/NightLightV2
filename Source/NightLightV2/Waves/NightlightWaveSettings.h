@@ -69,7 +69,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Budget", meta = (ClampMin = "0.0"))
 	float BudgetGrowthPerWave = 3.0f;
 
-	// Used from Sprint 3: A in the budget formula, nudged after each wave by the skill score
+	// A in the budget formula, nudged after each wave by the skill score
 	// (Hunicke and Chapman, 2004).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
 	float StartingAdaptiveFactor = 1.0f;
@@ -91,6 +91,34 @@ public:
 	// A score below this lowers A by AdaptiveStep.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float LowerScoreThreshold = 0.4f;
+
+	// How much each measure counts towards the skill score. The planning document names
+	// the four measures but not their weights, so they start equal.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float CoreHealthWeight = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float EnemiesStoppedWeight = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float ClearTimeWeight = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float UnspentTokensWeight = 0.25f;
+
+	// A wave cleared within its spawning time plus this scores 1 on time. The score
+	// falls to 0 at twice that.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float ClearTimeGraceSeconds = 10.0f;
+
+	// This many unspent tokens at the end of a wave gives a full token score.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "1"))
+	int32 TokensForFullScore = 100;
+
+	// Our reading of the document is that spare tokens mean the player is comfortable.
+	// Untick to score spare tokens as the player struggling instead.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive")
+	bool bSpareTokensRaiseScore = true;
 
 	// Seconds between spawns in wave 1.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Spawn Gap", meta = (ClampMin = "0.1"))
@@ -116,28 +144,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Brute Waves", meta = (ClampMin = "1.0"))
 	float BruteWaveBruteWeightMultiplier = 3.0f;
 
-	// Used from Sprint 2: a longer first build phase so the player can read the map and place defenders.
+	// A longer first build phase so the player can read the map and place defenders.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
 	float FirstBuildPhaseSeconds = 20.0f;
 
-	// Used from Sprint 2: the countdown between later waves.
+	// The countdown between later waves.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
 	float BuildPhaseSeconds = 12.0f;
 
-	// Used from Sprint 2: no build phase is shorter than this, so the player always has time to place a defender.
+	// No build phase is shorter than this, so the player always has time to place a defender.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
 	float MinBuildPhaseSeconds = 8.0f;
 
-	// Used from Sprint 2: the share of a wave spawned slowly at the start, taken from the cheapest enemies.
+	// The share of a wave spawned slowly at the start, taken from the cheapest enemies.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float BuildUpShare = 0.4f;
 
-	// Used from Sprint 2: the share spawned at the fastest gap, taken from the most expensive enemies.
+	// The share spawned at the fastest gap, taken from the most expensive enemies.
 	// Relief gets whatever is left after build-up and peak.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float PeakShare = 0.45f;
 
-	// Used from Sprint 2: build-up and relief spawn at the wave's spawn gap times this, so they feel slower.
+	// Build-up and relief spawn at the wave's spawn gap times this, so they feel slower.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "1.0"))
 	float OffPeakGapMultiplier = 1.75f;
 };
