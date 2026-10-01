@@ -101,6 +101,12 @@ void ANightlightDefender::ApplyDamage(const float DamageAmount)
 	Die();
 }
 
+float ANightlightDefender::GetDamagePerSecond() const
+{
+	// The attack timer never runs faster than every 0.1 seconds, so the same floor is used here.
+	return FMath::Max(AttackDamage, 0.0f) / FMath::Max(AttackInterval, 0.1f);
+}
+
 ANightlightEnemy* ANightlightDefender::FindTarget_Implementation()
 {
 	// The default target is the closest living enemy inside the attack range. The registry replaces a

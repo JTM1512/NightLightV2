@@ -47,6 +47,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	float GetMaxHealth() const { return MaxHealth; }
 
+	// The wave director reads these to measure how well each spawn route is defended. BlueprintPure, so they
+	// show as getter nodes without an execution pin (Epic Games, Inc., 2026e).
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender|Attack")
+	float GetAttackRange() const { return AttackRange; }
+
+	// Attack Damage divided by Attack Interval, with the same minimum interval the attack timer uses.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender|Attack")
+	float GetDamagePerSecond() const;
+
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Defender")
 	FNightlightDefenderHealthChangedSignature OnHealthChanged;
 

@@ -211,4 +211,19 @@ public:
 	// How long spawns may be held while the challenge stays high before the wave moves to relief instead.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Challenge", meta = (ClampMin = "0.0"))
 	float MaxHoldSeconds = 6.0f;
+
+	// Damage per second of defenders in reach that halves a route's spawn weight, so weak routes are picked more.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Routes", meta = (ClampMin = "1.0"))
+	float RouteDefenceScale = 20.0f;
+
+	// Each route's weight is multiplied by a random factor within plus or minus this share, rolled once per wave.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Routes", meta = (ClampMin = "0.0", ClampMax = "0.9"))
+	float RouteRandomFactor = 0.2f;
+
+	// JTM1512's idea as a weight, not a rule: Brutes lean towards the shortest route and Shades the longest.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Routes", meta = (ClampMin = "1.0"))
+	float BruteShortestRouteMultiplier = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Routes", meta = (ClampMin = "1.0"))
+	float ShadeLongestRouteMultiplier = 1.5f;
 };

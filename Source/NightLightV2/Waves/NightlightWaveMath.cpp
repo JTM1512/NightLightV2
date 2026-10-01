@@ -15,7 +15,7 @@ namespace
 	}
 
 	// Fisher-Yates shuffle: swap each slot, from the back, with a random slot at or before it. The stream
-	// keeps the order the same for the same seed (Epic Games, Inc., 2026b).
+	// keeps the order the same for the same seed (Epic Games, Inc., 2026c).
 	void ShuffleWithStream(TArray<int32>& Entries, FRandomStream& RandomStream)
 	{
 		for (int32 Index = Entries.Num() - 1; Index > 0; --Index)
@@ -78,7 +78,7 @@ float UNightlightWaveMath::CalculateSpawnGap(const UNightlightWaveSettings* Sett
 	}
 
 	// Maps wave 1 to the first gap and the last ramp wave to the final gap. The clamp keeps it flat
-	// after that (Epic Games, Inc., 2026c).
+	// after that (Epic Games, Inc., 2026d).
 	return FMath::GetMappedRangeValueClamped(
 		FVector2f(1.0f, static_cast<float>(Settings->SpawnGapRampWaves)),
 		FVector2f(Settings->FirstWaveSpawnGap, Settings->FinalSpawnGap),
@@ -104,7 +104,6 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 	{
 		CandidateIndices.Reset();
 		CandidateWeights.Reset();
-		float TotalWeight = 0.0f;
 
 		// Only unlocked types with a class that the remaining budget can still pay for.
 		for (int32 EntryIndex = 0; EntryIndex < Settings->Enemies.Num(); ++EntryIndex)
@@ -131,27 +130,13 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 
 			CandidateIndices.Add(EntryIndex);
 			CandidateWeights.Add(Weight);
-			TotalWeight += Weight;
 		}
 
-		if (CandidateIndices.IsEmpty())
+		// The same weighted pick the spawn routes use, so there is only one implementation of it.
+		const int32 PickedSlot = PickWeightedIndex(CandidateWeights, RandomStream);
+		if (PickedSlot == INDEX_NONE)
 		{
 			break;
-		}
-
-		// Weighted random pick: roll a point along the total weight and find whose slice it lands in. The
-		// stream makes the same seed give the same wave every time (Epic Games, Inc., 2026b).
-		const float Roll = RandomStream.FRand() * TotalWeight;
-		int32 PickedSlot = CandidateIndices.Num() - 1;
-		float RunningWeight = 0.0f;
-		for (int32 Slot = 0; Slot < CandidateIndices.Num(); ++Slot)
-		{
-			RunningWeight += CandidateWeights[Slot];
-			if (Roll < RunningWeight)
-			{
-				PickedSlot = Slot;
-				break;
-			}
 		}
 
 		const int32 PickedEntryIndex = CandidateIndices[PickedSlot];
@@ -176,7 +161,7 @@ FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
 	const int32 PeakCount = FMath::Clamp(FMath::RoundToInt(EnemyCount * Settings->PeakShare), 0, EnemyCount - BuildUpCount);
 
 	// Most expensive first. A stable sort keeps equal costs in their planned order, so the split only
-	// depends on the plan and the seed (Epic Games, Inc., 2026d).
+	// depends on the plan and the seed (Epic Games, Inc., 2026e).
 	TArray<int32> SortedEntries = PlannedEntryIndices;
 	SortedEntries.StableSort([Settings](const int32 First, const int32 Second)
 	{
@@ -257,7 +242,7 @@ float UNightlightWaveMath::CalculateClearTimeScore(
 		return 1.0f;
 	}
 
-	// Full marks up to the target, then a straight line down to 0 at twice the target (Epic Games, Inc., 2026c).
+	// Full marks up to the target, then a straight line down to 0 at twice the target (Epic Games, Inc., 2026d).
 	return FMath::GetMappedRangeValueClamped(
 		FVector2f(TargetSeconds, TargetSeconds * 2.0f),
 		FVector2f(1.0f, 0.0f),
@@ -362,6 +347,105 @@ void UNightlightWaveMath::MovePhaseEnemiesToFront(TArray<int32>& FromPhase, TArr
 	FromPhase.Reset();
 }
 
+int32 UNightlightWaveMath::PickWeightedIndex(const TArray<float>& Weights, FRandomStream& RandomStream)
+{
+	float TotalWeight = 0.0f;
+	for (const float Weight : Weights)
+	{
+		TotalWeight += FMath::Max(Weight, 0.0f);
+	}
+
+	// Roll a point along the total weight and walk the slices until the roll is used up. Zero weights have no
+	// slice, so they are never picked. The stream gives the same picks for the same seed (Epic Games, Inc., 2026c).
+	float Roll = RandomStream.FRand() * TotalWeight;
+	for (int32 Index = 0; Index < Weights.Num(); ++Index)
+	{
+		if (Weights[Index] > 0.0f && (Roll -= Weights[Index]) < 0.0f)
+		{
+			return Index;
+		}
+	}
+
+	// Float rounding can leave a tiny roll over, so it falls to the last slice. -1 when nothing can be picked.
+	return Weights.FindLastByPredicate([](const float Weight) { return Weight > 0.0f; });
+}
+
+float UNightlightWaveMath::CalculateRouteDefence(
+	const TArray<FVector>& RoutePoints,
+	const TArray<FVector>& DefenderLocations,
+	const TArray<float>& DefenderRanges,
+	const TArray<float>& DefenderDps)
+{
+	float Defence = 0.0f;
+	const int32 DefenderCount = FMath::Min3(DefenderLocations.Num(), DefenderRanges.Num(), DefenderDps.Num());
+	for (int32 DefenderIndex = 0; DefenderIndex < DefenderCount; ++DefenderIndex)
+	{
+		// Each segment runs from the previous point to this one, and a defender counts once however many it reaches.
+		// The closest point on the segment, not just its ends, catches a defender beside a long straight
+		// (Epic Games, Inc., 2026b).
+		for (int32 PointIndex = 0; PointIndex < RoutePoints.Num(); ++PointIndex)
+		{
+			const FVector ClosestPoint = FMath::ClosestPointOnSegment(
+				DefenderLocations[DefenderIndex], RoutePoints[FMath::Max(PointIndex - 1, 0)], RoutePoints[PointIndex]);
+			if (FVector::Dist(DefenderLocations[DefenderIndex], ClosestPoint) <= DefenderRanges[DefenderIndex])
+			{
+				Defence += FMath::Max(DefenderDps[DefenderIndex], 0.0f);
+				break;
+			}
+		}
+	}
+	return Defence;
+}
+
+float UNightlightWaveMath::CalculateRouteWeight(const UNightlightWaveSettings* Settings, const float Defence, FRandomStream& RandomStream)
+{
+	Settings = GetSettingsOrDefault(Settings);
+
+	// RouteDefenceScale damage per second halves the weight. The random factor stops the least defended route
+	// always winning (Epic Games, Inc., 2026c).
+	const float DefenceWeight = 1.0f / (1.0f + FMath::Max(Defence, 0.0f) / Settings->RouteDefenceScale);
+	return DefenceWeight * RandomStream.FRandRange(1.0f - Settings->RouteRandomFactor, 1.0f + Settings->RouteRandomFactor);
+}
+
+float UNightlightWaveMath::CalculateRouteLength(const TArray<FVector>& RoutePoints)
+{
+	float Length = 0.0f;
+	for (int32 PointIndex = 1; PointIndex < RoutePoints.Num(); ++PointIndex)
+	{
+		Length += FVector::Dist(RoutePoints[PointIndex - 1], RoutePoints[PointIndex]);
+	}
+	return Length;
+}
+
+TArray<float> UNightlightWaveMath::ApplyRoleRoutePreference(
+	const UNightlightWaveSettings* Settings,
+	const ENightlightWaveEnemyRole Role,
+	const TArray<float>& BaseWeights,
+	const TArray<float>& RouteLengths)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	TArray<float> Weights = BaseWeights;
+	if (Role == ENightlightWaveEnemyRole::Walker || Weights.Num() < 2 || RouteLengths.Num() != Weights.Num())
+	{
+		return Weights;
+	}
+
+	// JTM1512's idea as a multiplier on the defence weight, not a hard rule, so a well defended short route can
+	// still lose to a bare long one.
+	const bool bBrute = Role == ENightlightWaveEnemyRole::Brute;
+	int32 PreferredIndex = 0;
+	for (int32 RouteIndex = 1; RouteIndex < RouteLengths.Num(); ++RouteIndex)
+	{
+		if (bBrute ? RouteLengths[RouteIndex] < RouteLengths[PreferredIndex] : RouteLengths[RouteIndex] > RouteLengths[PreferredIndex])
+		{
+			PreferredIndex = RouteIndex;
+		}
+	}
+
+	Weights[PreferredIndex] *= bBrute ? Settings->BruteShortestRouteMultiplier : Settings->ShadeLongestRouteMultiplier;
+	return Weights;
+}
+
 /*
 References
 
@@ -375,19 +459,23 @@ Epic Games, Inc., 2026a. Array Containers in Unreal Engine. [online] Available a
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/array-containers-in-unreal-engine>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026b. FRandomStream. [online] Available at:
+Epic Games, Inc., 2026b. FMath::ClosestPointOnSegment. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/ClosestPointOnSegment>
+[Accessed 1 October 2026].
+
+Epic Games, Inc., 2026c. FRandomStream. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FRandomStream>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026c. GetMappedRangeValueClamped. [online] Available at:
+Epic Games, Inc., 2026d. GetMappedRangeValueClamped. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/GetMappedRangeValueClamped>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026d. TArray::StableSort. [online] Available at:
+Epic Games, Inc., 2026e. TArray::StableSort. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TArray/StableSort>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026e. UBlueprintFunctionLibrary. [online] Available at:
+Epic Games, Inc., 2026f. UBlueprintFunctionLibrary. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UBlueprintFunctionLibrary>
 [Accessed 1 October 2026].
 

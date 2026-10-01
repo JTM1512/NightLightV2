@@ -314,6 +314,65 @@ bool FNightlightWaveChallengeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWaveRouteWeightsTest,
+	"Nightlight.Waves.RouteWeights",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWaveRouteWeightsTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+
+	// Two parallel routes 2000 units apart, with route B twice as long. One defender (600 range, 20 damage per
+	// second) stands 300 units beside route A.
+	const TArray<FVector> RouteA = { FVector(0.0f, 0.0f, 0.0f), FVector(1000.0f, 0.0f, 0.0f), FVector(2000.0f, 0.0f, 0.0f) };
+	const TArray<FVector> RouteB = { FVector(0.0f, 2000.0f, 0.0f), FVector(4000.0f, 2000.0f, 0.0f) };
+	const TArray<FVector> Defenders = { FVector(500.0f, 300.0f, 0.0f) };
+	const float DefenceA = UNightlightWaveMath::CalculateRouteDefence(RouteA, Defenders, { 600.0f }, { 20.0f });
+	const float DefenceB = UNightlightWaveMath::CalculateRouteDefence(RouteB, Defenders, { 600.0f }, { 20.0f });
+	TestEqual(TEXT("The defender beside route A counts once"), DefenceA, 20.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Route B is out of reach"), DefenceB, 0.0f, KINDA_SMALL_NUMBER);
+
+	// With no randomness, 20 damage per second halves route A and the bare route B weighs exactly 1.
+	Settings->RouteRandomFactor = 0.0f;
+	FRandomStream Stream(3);
+	TestEqual(TEXT("The defended route weighs 0.5"), UNightlightWaveMath::CalculateRouteWeight(Settings, DefenceA, Stream), 0.5f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("The undefended route weighs 1"), UNightlightWaveMath::CalculateRouteWeight(Settings, DefenceB, Stream), 1.0f, KINDA_SMALL_NUMBER);
+
+	// Equal, undefended routes stay inside the plus or minus 20% band.
+	Settings->RouteRandomFactor = 0.2f;
+	bool bAllInBand = true;
+	for (int32 Roll = 0; Roll < 200; ++Roll)
+	{
+		const float Weight = UNightlightWaveMath::CalculateRouteWeight(Settings, 0.0f, Stream);
+		bAllInBand &= Weight >= 0.8f - KINDA_SMALL_NUMBER && Weight <= 1.2f + KINDA_SMALL_NUMBER;
+	}
+	TestTrue(TEXT("Equal routes stay within plus or minus 20%"), bAllInBand);
+
+	// From equal weights, Brutes boost the shortest route, Shades the longest and Walkers neither.
+	const TArray<float> Equal = { 1.0f, 1.0f };
+	const TArray<float> Lengths = { UNightlightWaveMath::CalculateRouteLength(RouteA), UNightlightWaveMath::CalculateRouteLength(RouteB) };
+	TestEqual(TEXT("Route lengths sum their segments"), Lengths[1], 4000.0f, KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("Brutes favour the shortest route"), UNightlightWaveMath::ApplyRoleRoutePreference(Settings, ENightlightWaveEnemyRole::Brute, Equal, Lengths) == TArray<float>({ 1.5f, 1.0f }));
+	TestTrue(TEXT("Shades favour the longest route"), UNightlightWaveMath::ApplyRoleRoutePreference(Settings, ENightlightWaveEnemyRole::Shade, Equal, Lengths) == TArray<float>({ 1.0f, 1.5f }));
+	TestTrue(TEXT("Walkers leave the weights alone"), UNightlightWaveMath::ApplyRoleRoutePreference(Settings, ENightlightWaveEnemyRole::Walker, Equal, Lengths) == Equal);
+	TestTrue(TEXT("One route changes nothing"), UNightlightWaveMath::ApplyRoleRoutePreference(Settings, ENightlightWaveEnemyRole::Brute, { 0.7f }, { 1000.0f }) == TArray<float>({ 0.7f }));
+
+	// Zero weights are never picked, and with nothing to pick the result is -1.
+	bool bPickedZero = false;
+	for (int32 Pick = 0; Pick < 1000; ++Pick)
+	{
+		const int32 Picked = UNightlightWaveMath::PickWeightedIndex({ 0.0f, 1.0f, 0.0f, 2.0f, 0.0f }, Stream);
+		bPickedZero |= Picked != 1 && Picked != 3;
+	}
+	TestFalse(TEXT("PickWeightedIndex never returns a zero-weight index"), bPickedZero);
+	TestEqual(TEXT("All-zero weights return -1"), UNightlightWaveMath::PickWeightedIndex({ 0.0f, 0.0f }, Stream), static_cast<int32>(INDEX_NONE));
+
+	return true;
+}
+
 #endif
 
 /*

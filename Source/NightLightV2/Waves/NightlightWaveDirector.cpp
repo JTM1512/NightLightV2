@@ -99,7 +99,14 @@ void ANightlightWaveDirector::StartWaves()
 	const UNightlightWaveSettings* const Settings = GetSettings();
 	AdaptiveFactor = FMath::Clamp(Settings->StartingAdaptiveFactor, Settings->MinAdaptiveFactor, Settings->MaxAdaptiveFactor);
 	CurrentWaveNumber = 0;
-	NextRouteIndex = 0;
+
+	// Route lengths never change, so they are measured once for the Brute and Shade route preferences.
+	RouteLengths.Reset();
+	for (int32 RouteIndex = 0; RouteIndex < EnemySpawner->GetRouteCount(); ++RouteIndex)
+	{
+		RouteLengths.Add(UNightlightWaveMath::CalculateRouteLength(EnemySpawner->GetRouteWorldLocations(RouteIndex)));
+	}
+
 	StartBuildPhase(Settings->FirstBuildPhaseSeconds);
 }
 
@@ -160,6 +167,9 @@ void ANightlightWaveDirector::StartWave()
 	BuildUpEnemies = PhaseLists.BuildUp;
 	PeakEnemies = PhaseLists.Peak;
 	ReliefEnemies = PhaseLists.Relief;
+
+	// Rolled after the plan, so the same seed still plans the same enemies whatever the defence looks like.
+	UpdateRouteWeights();
 
 	WaveEnemies.Reset();
 	EnemiesSpawnedThisWave = 0;
@@ -257,13 +267,13 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 	PhaseEnemies->RemoveAt(0);
 
 	const UNightlightWaveSettings* const Settings = GetSettings();
-	const int32 RouteCount = EnemySpawner ? EnemySpawner->GetRouteCount() : 0;
-	if (Settings->Enemies.IsValidIndex(EntryIndex) && RouteCount > 0)
+	// Brutes lean towards the shortest route and Shades towards the longest, on top of this wave's route weights.
+	const int32 RouteIndex = EnemySpawner && Settings->Enemies.IsValidIndex(EntryIndex)
+		? UNightlightWaveMath::PickWeightedIndex(UNightlightWaveMath::ApplyRoleRoutePreference(
+			Settings, Settings->Enemies[EntryIndex].Role, RouteBaseWeights, RouteLengths), WaveRandomStream)
+		: INDEX_NONE;
+	if (RouteIndex != INDEX_NONE)
 	{
-		// Routes are taken in turn until the weighted route picks are added.
-		const int32 RouteIndex = NextRouteIndex % RouteCount;
-		NextRouteIndex = (RouteIndex + 1) % RouteCount;
-
 		if (ANightlightEnemy* const Enemy = EnemySpawner->SpawnEnemyOnRoute(Settings->Enemies[EntryIndex].EnemyClass, RouteIndex))
 		{
 			// A weak pointer, so an enemy destroyed without its EndPlay reaching us is still dropped later
@@ -280,6 +290,34 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 		// Every enemy is out, so the wave clears as soon as the last one leaves play.
 		GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
 		TryFinishWave();
+	}
+}
+
+void ANightlightWaveDirector::UpdateRouteWeights()
+{
+	// The registry already lists the living defenders, so no actor search is needed (Epic Games, Inc., 2026f).
+	TArray<FVector> DefenderLocations;
+	TArray<float> DefenderRanges;
+	TArray<float> DefenderDps;
+	if (const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
+	{
+		for (const ANightlightDefender* const Defender : Registry->GetDefenders())
+		{
+			DefenderLocations.Add(Defender->GetActorLocation());
+			DefenderRanges.Add(Defender->GetAttackRange());
+			DefenderDps.Add(Defender->GetDamagePerSecond());
+		}
+	}
+
+	// Weakly defended routes weigh more, so the player has to cover every route.
+	RouteDefence.Reset();
+	RouteBaseWeights.Reset();
+	for (int32 RouteIndex = 0; RouteIndex < (EnemySpawner ? EnemySpawner->GetRouteCount() : 0); ++RouteIndex)
+	{
+		const float Defence = UNightlightWaveMath::CalculateRouteDefence(
+			EnemySpawner->GetRouteWorldLocations(RouteIndex), DefenderLocations, DefenderRanges, DefenderDps);
+		RouteDefence.Add(Defence);
+		RouteBaseWeights.Add(UNightlightWaveMath::CalculateRouteWeight(GetSettings(), Defence, WaveRandomStream));
 	}
 }
 
@@ -322,6 +360,8 @@ void ANightlightWaveDirector::TryFinishWave()
 	LastWaveSummary.bReliefCameEarly = bReliefCameEarly;
 	LastWaveSummary.bPeakCameEarly = bPeakCameEarly;
 	LastWaveSummary.HighestChallengeLevel = HighestChallengeLevel;
+	LastWaveSummary.RouteDefence = RouteDefence;
+	LastWaveSummary.RouteWeights = RouteBaseWeights;
 	ChallengeLevel = 0.0f;
 
 	// Score how the player handled the wave and nudge A, which scales the next wave's budget

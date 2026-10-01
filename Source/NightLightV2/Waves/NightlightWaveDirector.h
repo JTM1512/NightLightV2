@@ -92,6 +92,14 @@ struct NIGHTLIGHTV2_API FNightlightWaveSummary
 	// The highest live challenge level reached during the wave, from 0 to 100.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	float HighestChallengeLevel = 0.0f;
+
+	// The damage per second of the defenders in reach of each route when the wave started, by route index.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	TArray<float> RouteDefence;
+
+	// Each route's spawn weight for the wave, before the Brute and Shade route preferences, by route index.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	TArray<float> RouteWeights;
 };
 
 // How the director changed the pacing after a challenge level check.
@@ -249,7 +257,6 @@ private:
 	ENightlightWavePhase WavePhase = ENightlightWavePhase::NotStarted;
 	int32 CurrentWaveNumber = 0;
 	int32 CurrentWaveBudget = 0;
-	int32 NextRouteIndex = 0;
 	int32 EnemiesSpawnedThisWave = 0;
 	int32 EnemiesStoppedThisWave = 0;
 	float WaveStartTime = 0.0f;
@@ -283,6 +290,14 @@ private:
 	bool bReliefCameEarly = false;
 	bool bPeakCameEarly = false;
 
+	// Each route's length, worked out once after the routes are prepared, because routes never change.
+	TArray<float> RouteLengths;
+
+	// Each route's defence and spawn weight for this wave. Worked out once when the wave starts, so each route's
+	// random factor is rolled once per wave and the weights stay steady while the wave spawns.
+	TArray<float> RouteDefence;
+	TArray<float> RouteBaseWeights;
+
 	FNightlightWaveInfo CurrentWaveInfo;
 	FNightlightWaveSummary LastWaveSummary;
 
@@ -291,6 +306,7 @@ private:
 	void StartWave();
 	void StartPhase(ENightlightWavePhase Phase);
 	void SpawnNextPhaseEnemy();
+	void UpdateRouteWeights();
 	void TryFinishWave();
 	FNightlightWaveMeasures BuildWaveMeasures(float ClearSeconds) const;
 	void StopWaves();

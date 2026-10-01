@@ -88,7 +88,7 @@ struct NIGHTLIGHTV2_API FNightlightWaveMeasures
 };
 
 // The wave maths on its own, so the wave director stays small and the tests can call it directly
-// (Epic Games, Inc., 2026e). A null Settings uses the C++ defaults from the planning document.
+// (Epic Games, Inc., 2026f). A null Settings uses the C++ defaults from the planning document.
 UCLASS()
 class NIGHTLIGHTV2_API UNightlightWaveMath : public UBlueprintFunctionLibrary
 {
@@ -172,4 +172,26 @@ public:
 	// Enemies are only moved, never removed, so the wave still spawns its whole budget.
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
 	static void MovePhaseEnemiesToFront(UPARAM(ref) TArray<int32>& FromPhase, UPARAM(ref) TArray<int32>& ToPhase);
+
+	// A weighted random index. Zero and negative weights are never picked; -1 when none is positive.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static int32 PickWeightedIndex(const TArray<float>& Weights, UPARAM(ref) FRandomStream& RandomStream);
+
+	// The summed damage per second of every defender whose range reaches the route. The defender arrays line up by
+	// index, so this is testable without spawning actors.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculateRouteDefence(const TArray<FVector>& RoutePoints, const TArray<FVector>& DefenderLocations,
+		const TArray<float>& DefenderRanges, const TArray<float>& DefenderDps);
+
+	// 1 / (1 + Defence / RouteDefenceScale), times a random factor within plus or minus RouteRandomFactor.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static float CalculateRouteWeight(const UNightlightWaveSettings* Settings, float Defence, UPARAM(ref) FRandomStream& RandomStream);
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculateRouteLength(const TArray<FVector>& RoutePoints);
+
+	// A copy of the weights with the shortest route boosted for Brutes and the longest for Shades.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static TArray<float> ApplyRoleRoutePreference(const UNightlightWaveSettings* Settings, ENightlightWaveEnemyRole Role,
+		const TArray<float>& BaseWeights, const TArray<float>& RouteLengths);
 };
