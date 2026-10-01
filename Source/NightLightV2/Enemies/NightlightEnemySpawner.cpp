@@ -42,15 +42,8 @@ void ANightlightEnemySpawner::BeginPlay()
 void ANightlightEnemySpawner::StartSpawning()
 {
 	StopSpawning();
-	CachedRouteWorldLocations.Reset();
 	NextRouteIndex = 0;
 	NextEnemyClassIndex = 0;
-
-	if (!WorldGenerator)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because no World Generator is assigned."));
-		return;
-	}
 
 	if (!HasAnyEnemyClass())
 	{
@@ -58,17 +51,42 @@ void ANightlightEnemySpawner::StartSpawning()
 		return;
 	}
 
+	if (!PrepareRoutes())
+	{
+		return;
+	}
+
+	// Spawn the first enemy now, then let the timer handle the rest.
+	SpawnNextEnemy();
+	GetWorldTimerManager().SetTimer(
+		SpawnTimerHandle,
+		this,
+		&ANightlightEnemySpawner::SpawnNextEnemy,
+		FMath::Max(SpawnInterval, 0.1f),
+		true);
+}
+
+bool ANightlightEnemySpawner::PrepareRoutes()
+{
+	CachedRouteWorldLocations.Reset();
+
+	if (!WorldGenerator)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy routes were not prepared because no World Generator is assigned."));
+		return false;
+	}
+
 	if (!DreamCore)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because no Dream Core is assigned."));
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy routes were not prepared because no Dream Core is assigned."));
+		return false;
 	}
 
 	FVector CoreWorldLocation;
 	if (!WorldGenerator->GetCoreWorldLocation(CoreWorldLocation))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because the generator has no valid Core position."));
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy routes were not prepared because the generator has no valid Core position."));
+		return false;
 	}
 
 	// Keep the placed Core on the same generated point where every route ends.
@@ -86,18 +104,11 @@ void ANightlightEnemySpawner::StartSpawning()
 
 	if (CachedRouteWorldLocations.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning did not start because the generator has no complete routes."));
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy routes were not prepared because the generator has no complete routes."));
+		return false;
 	}
 
-	// Spawn the first enemy now, then let the timer handle the rest.
-	SpawnNextEnemy();
-	GetWorldTimerManager().SetTimer(
-		SpawnTimerHandle,
-		this,
-		&ANightlightEnemySpawner::SpawnNextEnemy,
-		FMath::Max(SpawnInterval, 0.1f),
-		true);
+	return true;
 }
 
 void ANightlightEnemySpawner::StopSpawning()
@@ -114,12 +125,34 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 	}
 
 	const int32 RouteIndex = NextRouteIndex % CachedRouteWorldLocations.Num();
-	const TArray<FVector>& RoutePoints = CachedRouteWorldLocations[RouteIndex];
-	if (RoutePoints.Num() < 2)
+	if (CachedRouteWorldLocations[RouteIndex].Num() < 2)
 	{
 		StopSpawning();
 		UE_LOG(LogTemp, Warning, TEXT("Nightlight enemy spawning stopped because a cached route became incomplete."));
 		return;
+	}
+
+	if (SpawnEnemyOnRoute(TakeNextEnemyClass(), RouteIndex))
+	{
+		NextRouteIndex = (RouteIndex + 1) % CachedRouteWorldLocations.Num();
+	}
+}
+
+ANightlightEnemy* ANightlightEnemySpawner::SpawnEnemyOnRoute(
+	const TSubclassOf<ANightlightEnemy> SpawnClass,
+	const int32 RouteIndex)
+{
+	if (!SpawnClass || !CachedRouteWorldLocations.IsValidIndex(RouteIndex))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight could not spawn an enemy because it has no class or route %d is not prepared."), RouteIndex);
+		return nullptr;
+	}
+
+	const TArray<FVector>& RoutePoints = CachedRouteWorldLocations[RouteIndex];
+	if (RoutePoints.Num() < 2)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Nightlight could not spawn an enemy because route %d is incomplete."), RouteIndex);
+		return nullptr;
 	}
 
 	// AlwaysSpawn places the enemy on its Rift even when it overlaps the terrain
@@ -129,7 +162,7 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	ANightlightEnemy* Enemy = GetWorld()->SpawnActor<ANightlightEnemy>(
-		TakeNextEnemyClass(),
+		SpawnClass,
 		RoutePoints[0],
 		FRotator::ZeroRotator,
 		SpawnParameters);
@@ -137,12 +170,19 @@ void ANightlightEnemySpawner::SpawnNextEnemy()
 	if (!Enemy)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Nightlight could not spawn the selected enemy class at route %d."), RouteIndex);
-		return;
+		return nullptr;
 	}
 
 	Enemy->AssignDreamCore(DreamCore);
 	Enemy->AssignRoute(RoutePoints);
-	NextRouteIndex = (RouteIndex + 1) % CachedRouteWorldLocations.Num();
+	return Enemy;
+}
+
+const TArray<FVector>& ANightlightEnemySpawner::GetRouteWorldLocations(const int32 RouteIndex) const
+{
+	// A reference needs something to point at, so an invalid index gets this shared empty list.
+	static const TArray<FVector> EmptyRoute;
+	return CachedRouteWorldLocations.IsValidIndex(RouteIndex) ? CachedRouteWorldLocations[RouteIndex] : EmptyRoute;
 }
 
 bool ANightlightEnemySpawner::HasAnyEnemyClass() const

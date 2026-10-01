@@ -123,4 +123,21 @@ public:
 	// Used from Sprint 2: the countdown between later waves.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
 	float BuildPhaseSeconds = 12.0f;
+
+	// Used from Sprint 2: no build phase is shorter than this, so the player always has time to place a defender.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
+	float MinBuildPhaseSeconds = 8.0f;
+
+	// Used from Sprint 2: the share of a wave spawned slowly at the start, taken from the cheapest enemies.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float BuildUpShare = 0.4f;
+
+	// Used from Sprint 2: the share spawned at the fastest gap, taken from the most expensive enemies.
+	// Relief gets whatever is left after build-up and peak.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float PeakShare = 0.45f;
+
+	// Used from Sprint 2: build-up and relief spawn at the wave's spawn gap times this, so they feel slower.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Phases", meta = (ClampMin = "1.0"))
+	float OffPeakGapMultiplier = 1.75f;
 };

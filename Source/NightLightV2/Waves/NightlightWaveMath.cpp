@@ -8,6 +8,21 @@ namespace
 	{
 		return Settings ? Settings : GetDefault<UNightlightWaveSettings>();
 	}
+
+	int32 GetThreatCost(const UNightlightWaveSettings* const Settings, const int32 EntryIndex)
+	{
+		return Settings->Enemies.IsValidIndex(EntryIndex) ? Settings->Enemies[EntryIndex].ThreatCost : 0;
+	}
+
+	// Fisher-Yates shuffle: swap each slot, from the back, with a random slot at or before it. The stream
+	// keeps the order the same for the same seed (Epic Games, Inc., 2026a).
+	void ShuffleWithStream(TArray<int32>& Entries, FRandomStream& RandomStream)
+	{
+		for (int32 Index = Entries.Num() - 1; Index > 0; --Index)
+		{
+			Entries.Swap(Index, RandomStream.RandRange(0, Index));
+		}
+	}
 }
 
 float FNightlightEnemyMixWeights::GetWeightForRole(const ENightlightWaveEnemyRole Role) const
@@ -147,6 +162,62 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 	return PlannedEntries;
 }
 
+FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
+	const UNightlightWaveSettings* Settings,
+	const TArray<int32>& PlannedEntryIndices,
+	FRandomStream& RandomStream)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	FNightlightWavePhaseLists PhaseLists;
+
+	// JTM1512's idea: each wave builds up, peaks, then gives the player a moment of relief.
+	const int32 EnemyCount = PlannedEntryIndices.Num();
+	const int32 BuildUpCount = FMath::Clamp(FMath::RoundToInt(EnemyCount * Settings->BuildUpShare), 0, EnemyCount);
+	const int32 PeakCount = FMath::Clamp(FMath::RoundToInt(EnemyCount * Settings->PeakShare), 0, EnemyCount - BuildUpCount);
+
+	// Most expensive first. A stable sort keeps equal costs in their planned order, so the split only
+	// depends on the plan and the seed (Epic Games, Inc., 2026c).
+	TArray<int32> SortedEntries = PlannedEntryIndices;
+	SortedEntries.StableSort([Settings](const int32 First, const int32 Second)
+	{
+		return GetThreatCost(Settings, First) > GetThreatCost(Settings, Second);
+	});
+
+	// The peak takes the front of the list, build-up the cheapest at the back and relief the middle.
+	const int32 BuildUpStart = EnemyCount - BuildUpCount;
+	for (int32 SortedIndex = 0; SortedIndex < EnemyCount; ++SortedIndex)
+	{
+		if (SortedIndex < PeakCount)
+		{
+			PhaseLists.Peak.Add(SortedEntries[SortedIndex]);
+		}
+		else if (SortedIndex < BuildUpStart)
+		{
+			PhaseLists.Relief.Add(SortedEntries[SortedIndex]);
+		}
+		else
+		{
+			PhaseLists.BuildUp.Add(SortedEntries[SortedIndex]);
+		}
+	}
+
+	// Shuffled so a phase does not always spawn its types in the same fixed order.
+	ShuffleWithStream(PhaseLists.BuildUp, RandomStream);
+	ShuffleWithStream(PhaseLists.Peak, RandomStream);
+	ShuffleWithStream(PhaseLists.Relief, RandomStream);
+	return PhaseLists;
+}
+
+float UNightlightWaveMath::GetPhaseSpawnGap(
+	const UNightlightWaveSettings* Settings,
+	const int32 WaveNumber,
+	const ENightlightWavePhase Phase)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	const float PeakGap = CalculateSpawnGap(Settings, WaveNumber);
+	return Phase == ENightlightWavePhase::Peak ? PeakGap : PeakGap * Settings->OffPeakGapMultiplier;
+}
+
 /*
 References
 
@@ -164,7 +235,11 @@ Epic Games, Inc., 2026b. GetMappedRangeValueClamped. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/GetMappedRangeValueClamped>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026c. UBlueprintFunctionLibrary. [online] Available at:
+Epic Games, Inc., 2026c. TArray::StableSort. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TArray/StableSort>
+[Accessed 1 October 2026].
+
+Epic Games, Inc., 2026d. UBlueprintFunctionLibrary. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UBlueprintFunctionLibrary>
 [Accessed 1 October 2026].
 */

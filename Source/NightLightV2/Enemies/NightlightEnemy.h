@@ -50,6 +50,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy")
 	bool IsDead() const { return bIsDead; }
 
+	// The wave director counts an enemy as stopped when it leaves play dead without having reached the Core.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy")
+	bool HasReachedCore() const { return bHasReachedCore; }
+
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy")
 	float GetCurrentHealth() const { return CurrentHealth; }
 

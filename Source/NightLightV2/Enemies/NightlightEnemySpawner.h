@@ -28,6 +28,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy Spawning")
 	void SpawnNextEnemy();
 
+	// Caches the generator's routes and moves the Core onto the generated point. The wave director calls this
+	// once before its first wave, so it can spawn without the spawner's own timer. False when anything is missing.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy Spawning")
+	bool PrepareRoutes();
+
+	// Spawns one enemy at the start of a cached route and gives it that route and the Core. Null when it fails.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy Spawning")
+	ANightlightEnemy* SpawnEnemyOnRoute(TSubclassOf<ANightlightEnemy> SpawnClass, int32 RouteIndex);
+
+	// Only routes with at least two points are cached, so every index below this count can be spawned on.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy Spawning")
+	int32 GetRouteCount() const { return CachedRouteWorldLocations.Num(); }
+
+	// The cached world points of one route, or an empty list for an invalid index.
+	const TArray<FVector>& GetRouteWorldLocations(int32 RouteIndex) const;
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy Spawning")
+	ANightlightDreamCore* GetDreamCore() const { return DreamCore; }
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy Spawning")
+	ANightlightWorldGenerator* GetWorldGenerator() const { return WorldGenerator; }
+
 protected:
 	virtual void BeginPlay() override;
 

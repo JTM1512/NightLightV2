@@ -136,6 +136,87 @@ bool FNightlightWaveBudgetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWavePhasesTest,
+	"Nightlight.Waves.Phases",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWavePhasesTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+	const int32 WalkerIndex = Settings->Enemies.IndexOfByPredicate([](const FNightlightWaveEnemyEntry& Entry) { return Entry.Role == ENightlightWaveEnemyRole::Walker; });
+	const int32 ShadeIndex = Settings->Enemies.IndexOfByPredicate([](const FNightlightWaveEnemyEntry& Entry) { return Entry.Role == ENightlightWaveEnemyRole::Shade; });
+	const int32 BruteIndex = Settings->Enemies.IndexOfByPredicate([](const FNightlightWaveEnemyEntry& Entry) { return Entry.Role == ENightlightWaveEnemyRole::Brute; });
+
+	// A 20-enemy plan: 12 Walkers, 6 Shades and 2 Brutes, mixed together like a real plan.
+	TArray<int32> Plan;
+	for (int32 Slot = 0; Slot < 20; ++Slot)
+	{
+		Plan.Add(Slot % 10 == 9 ? BruteIndex : (Slot % 3 == 1 ? ShadeIndex : WalkerIndex));
+	}
+	TestEqual(TEXT("The test plan has 2 Brutes"), Plan.FilterByPredicate([BruteIndex](const int32 Entry) { return Entry == BruteIndex; }).Num(), 2);
+	TestEqual(TEXT("The test plan has 6 Shades"), Plan.FilterByPredicate([ShadeIndex](const int32 Entry) { return Entry == ShadeIndex; }).Num(), 6);
+
+	FRandomStream Stream(42);
+	const FNightlightWavePhaseLists Lists = UNightlightWaveMath::SplitIntoPhases(Settings, Plan, Stream);
+
+	// 40% build-up, 45% peak and the rest relief.
+	TestEqual(TEXT("Build-up holds 8 of 20"), Lists.BuildUp.Num(), 8);
+	TestEqual(TEXT("Peak holds 9 of 20"), Lists.Peak.Num(), 9);
+	TestEqual(TEXT("Relief holds 3 of 20"), Lists.Relief.Num(), 3);
+
+	// Sorting both lists shows that every planned enemy appears exactly once.
+	TArray<int32> Combined = Lists.BuildUp;
+	Combined.Append(Lists.Peak);
+	Combined.Append(Lists.Relief);
+	Combined.Sort();
+	TArray<int32> SortedPlan = Plan;
+	SortedPlan.Sort();
+	TestTrue(TEXT("Nothing is lost or duplicated"), Combined == SortedPlan);
+
+	// The peak takes the most expensive enemies: its cheapest is never cheaper than anything outside it.
+	int32 CheapestPeakCost = MAX_int32;
+	for (const int32 EntryIndex : Lists.Peak)
+	{
+		CheapestPeakCost = FMath::Min(CheapestPeakCost, Settings->Enemies[EntryIndex].ThreatCost);
+	}
+	int32 DearestOffPeakCost = 0;
+	for (const TArray<int32>* const OffPeak : { &Lists.BuildUp, &Lists.Relief })
+	{
+		for (const int32 EntryIndex : *OffPeak)
+		{
+			DearestOffPeakCost = FMath::Max(DearestOffPeakCost, Settings->Enemies[EntryIndex].ThreatCost);
+		}
+	}
+	TestTrue(TEXT("The peak holds the most expensive enemies"), CheapestPeakCost >= DearestOffPeakCost);
+	TestTrue(TEXT("Both Brutes are in the peak"), ContainsRole(Settings, Lists.Peak, ENightlightWaveEnemyRole::Brute));
+	TestFalse(TEXT("Build-up has no Brute when there are Walkers to spare"), ContainsRole(Settings, Lists.BuildUp, ENightlightWaveEnemyRole::Brute));
+
+	// The same seed gives the same split, so a wave can be replayed while balancing.
+	FRandomStream RepeatStream(42);
+	const FNightlightWavePhaseLists RepeatLists = UNightlightWaveMath::SplitIntoPhases(Settings, Plan, RepeatStream);
+	TestTrue(TEXT("The same seed gives the same split"),
+		RepeatLists.BuildUp == Lists.BuildUp && RepeatLists.Peak == Lists.Peak && RepeatLists.Relief == Lists.Relief);
+
+	FRandomStream EmptyStream(1);
+	const FNightlightWavePhaseLists EmptyLists = UNightlightWaveMath::SplitIntoPhases(Settings, TArray<int32>(), EmptyStream);
+	TestTrue(TEXT("An empty plan gives three empty lists"),
+		EmptyLists.BuildUp.IsEmpty() && EmptyLists.Peak.IsEmpty() && EmptyLists.Relief.IsEmpty());
+
+	// Build-up and relief spawn 1.75 times slower than the peak.
+	for (const int32 WaveNumber : { 1, 10 })
+	{
+		const float PeakGap = UNightlightWaveMath::GetPhaseSpawnGap(Settings, WaveNumber, ENightlightWavePhase::Peak);
+		TestEqual(FString::Printf(TEXT("Wave %d peak gap is the base spawn gap"), WaveNumber), PeakGap, UNightlightWaveMath::CalculateSpawnGap(Settings, WaveNumber), KINDA_SMALL_NUMBER);
+		TestEqual(FString::Printf(TEXT("Wave %d build-up gap is 1.75 times the peak gap"), WaveNumber), UNightlightWaveMath::GetPhaseSpawnGap(Settings, WaveNumber, ENightlightWavePhase::BuildUp), PeakGap * 1.75f, KINDA_SMALL_NUMBER);
+		TestEqual(FString::Printf(TEXT("Wave %d relief gap is 1.75 times the peak gap"), WaveNumber), UNightlightWaveMath::GetPhaseSpawnGap(Settings, WaveNumber, ENightlightWavePhase::Relief), PeakGap * 1.75f, KINDA_SMALL_NUMBER);
+	}
+
+	return true;
+}
+
 #endif
 
 /*
