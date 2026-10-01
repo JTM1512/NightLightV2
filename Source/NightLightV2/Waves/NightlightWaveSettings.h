@@ -1,0 +1,126 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DataAsset.h"
+#include "Templates/SubclassOf.h"
+#include "NightlightWaveSettings.generated.h"
+
+class ANightlightEnemy;
+
+// What an enemy type does in a wave, so the play-style counters can boost one role without knowing the class.
+UENUM(BlueprintType)
+enum class ENightlightWaveEnemyRole : uint8
+{
+	// Medium-speed melee enemy.
+	Walker,
+
+	// Fragile ranged enemy.
+	Shade,
+
+	// Slow, heavy area attacker.
+	Brute
+};
+
+// One enemy type the wave director can buy with its threat budget (Epic Games, Inc., 2026b).
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightWaveEnemyEntry
+{
+	GENERATED_BODY()
+
+	// Left empty in C++ so the Blueprint child with its mesh and health bar is chosen in the editor.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves")
+	TSubclassOf<ANightlightEnemy> EnemyClass;
+
+	// Budget points one enemy of this type costs. At least 1, so spending always finishes.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves", meta = (ClampMin = "1"))
+	int32 ThreatCost = 1;
+
+	// The first wave this type can appear in. Waves start at 1.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves", meta = (ClampMin = "1"))
+	int32 UnlockWave = 1;
+
+	// How likely this type is to be picked compared with the other unlocked types.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
+	float BaseWeight = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves")
+	ENightlightWaveEnemyRole Role = ENightlightWaveEnemyRole::Walker;
+};
+
+// Every wave tuning number in one asset, so the balance pass never needs a C++ change. The defaults match
+// the planning document, so the game still works before DA_WaveSettings is made (Epic Games, Inc., 2026a).
+UCLASS(BlueprintType)
+class NIGHTLIGHTV2_API UNightlightWaveSettings : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	UNightlightWaveSettings();
+
+	// Enemy types the budget is spent on. Walker, Shade and Brute by default.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Enemies")
+	TArray<FNightlightWaveEnemyEntry> Enemies;
+
+	// B_0 in B_n = (B_0 + g * n) * A.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Budget", meta = (ClampMin = "0.0"))
+	float StartingBudget = 6.0f;
+
+	// g in B_n = (B_0 + g * n) * A. Linear growth keeps each wave a small step harder (Chen, 2007).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Budget", meta = (ClampMin = "0.0"))
+	float BudgetGrowthPerWave = 3.0f;
+
+	// Used from Sprint 3: A in the budget formula, nudged after each wave by the skill score
+	// (Hunicke and Chapman, 2004).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float StartingAdaptiveFactor = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float MinAdaptiveFactor = 0.75f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float MaxAdaptiveFactor = 1.35f;
+
+	// Kept small so the player does not notice the difficulty changing.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0"))
+	float AdaptiveStep = 0.1f;
+
+	// A score above this raises A by AdaptiveStep.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float RaiseScoreThreshold = 0.7f;
+
+	// A score below this lowers A by AdaptiveStep.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Adaptive", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float LowerScoreThreshold = 0.4f;
+
+	// Seconds between spawns in wave 1.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Spawn Gap", meta = (ClampMin = "0.1"))
+	float FirstWaveSpawnGap = 2.0f;
+
+	// Seconds between spawns from wave SpawnGapRampWaves onwards.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Spawn Gap", meta = (ClampMin = "0.1"))
+	float FinalSpawnGap = 0.8f;
+
+	// The wave where the gap reaches FinalSpawnGap and stops shrinking.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Spawn Gap", meta = (ClampMin = "1"))
+	int32 SpawnGapRampWaves = 10;
+
+	// Every Nth wave is a Brute wave: a peak, then a calmer wave after it (Booth, 2009).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Brute Waves", meta = (ClampMin = "1"))
+	int32 BruteWaveEvery = 5;
+
+	// Brute waves get a 25% larger budget by default.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Brute Waves", meta = (ClampMin = "1.0"))
+	float BruteWaveBudgetMultiplier = 1.25f;
+
+	// How strongly a Brute wave favours Brutes. The planning document gives no number, so this is our default.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Brute Waves", meta = (ClampMin = "1.0"))
+	float BruteWaveBruteWeightMultiplier = 3.0f;
+
+	// Used from Sprint 2: a longer first build phase so the player can read the map and place defenders.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
+	float FirstBuildPhaseSeconds = 20.0f;
+
+	// Used from Sprint 2: the countdown between later waves.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))
+	float BuildPhaseSeconds = 12.0f;
+};
