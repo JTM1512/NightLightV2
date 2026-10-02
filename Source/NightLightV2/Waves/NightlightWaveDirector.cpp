@@ -6,7 +6,41 @@
 #include "../Enemies/NightlightEnemySpawner.h"
 #include "../ProceduralGeneration/NightlightWorldGenerator.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
+
+// Its own category, so the wave readout can be filtered in the Output Log (Epic Games, Inc., 2026f).
+DEFINE_LOG_CATEGORY_STATIC(LogNightlightWaves, Log, All);
+
+namespace
+{
+	// Fixed on-screen keys, one per readout slot, so each line replaces its last copy instead of stacking.
+	constexpr int32 WaveDebugKey = 7300;
+
+	// "2 Walker, 3 Shade" for one phase list, counted per role.
+	FString DescribeEnemies(const UNightlightWaveSettings* const Settings, const TArray<int32>& Entries)
+	{
+		FString Text;
+		for (const ENightlightWaveEnemyRole Role : { ENightlightWaveEnemyRole::Walker, ENightlightWaveEnemyRole::Shade, ENightlightWaveEnemyRole::Brute })
+		{
+			const int32 Count = Entries.FilterByPredicate([Settings, Role](const int32 Entry)
+			{
+				return Settings->Enemies.IsValidIndex(Entry) && Settings->Enemies[Entry].Role == Role;
+			}).Num();
+			if (Count > 0)
+			{
+				Text += FString::Printf(TEXT("%s%d %s"), Text.IsEmpty() ? TEXT("") : TEXT(", "), Count, *UEnum::GetDisplayValueAsText(Role).ToString());
+			}
+		}
+		return Text.IsEmpty() ? TEXT("none") : Text;
+	}
+
+	// A measure as two decimals, or n/a when it was left out of the score.
+	FString DescribeMeasure(const float Measure)
+	{
+		return Measure < 0.0f ? TEXT("n/a") : FString::Printf(TEXT("%.2f"), Measure);
+	}
+}
 
 ANightlightWaveDirector::ANightlightWaveDirector()
 {
@@ -18,7 +52,7 @@ void ANightlightWaveDirector::BeginPlay()
 	Super::BeginPlay();
 
 	// The registry tells the director when each enemy leaves play, so it never has to search for them
-	// (Epic Games, Inc., 2026f).
+	// (Epic Games, Inc., 2026g).
 	if (UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
 	{
 		Registry->OnEnemyRemoved.AddDynamic(this, &ANightlightWaveDirector::HandleEnemyRemoved);
@@ -68,13 +102,13 @@ void ANightlightWaveDirector::StartWaves()
 
 	if (!EnemySpawner)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight waves did not start because no Enemy Spawner is assigned."));
+		UE_LOG(LogNightlightWaves, Warning, TEXT("Nightlight waves did not start because no Enemy Spawner is assigned."));
 		return;
 	}
 
 	if (!EnemySpawner->PrepareRoutes())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight waves did not start because the Enemy Spawner could not prepare its routes."));
+		UE_LOG(LogNightlightWaves, Warning, TEXT("Nightlight waves did not start because the Enemy Spawner could not prepare its routes."));
 		return;
 	}
 
@@ -159,7 +193,7 @@ void ANightlightWaveDirector::StartWave()
 	CurrentWaveBudget = UNightlightWaveMath::CalculateWaveBudget(Settings, CurrentWaveNumber, AdaptiveFactor);
 
 	// Read how the player has built from the living defenders, then pick a template that counters it
-	// (Epic Games, Inc., 2026f).
+	// (Epic Games, Inc., 2026g).
 	TArray<FVector> DefenderLocations;
 	TArray<ENightlightDefenderStyle> DefenderStyles;
 	if (const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
@@ -213,8 +247,25 @@ void ANightlightWaveDirector::StartWave()
 
 	if (PlannedEntries.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Nightlight wave %d planned no enemies. Check that every row in Wave Settings has an Enemy Class."), CurrentWaveNumber);
+		UE_LOG(LogNightlightWaves, Warning, TEXT("Nightlight wave %d planned no enemies. Check that every row in Wave Settings has an Enemy Class."), CurrentWaveNumber);
 	}
+
+	// One readable block per wave, so the balance pass can see every decision the director made.
+	FString RouteText;
+	for (int32 RouteIndex = 0; RouteIndex < RouteBaseWeights.Num(); ++RouteIndex)
+	{
+		RouteText += FString::Printf(TEXT("%s%d: %.2f (%.0f dps)"), RouteIndex > 0 ? TEXT(", ") : TEXT(""), RouteIndex, RouteBaseWeights[RouteIndex], RouteDefence[RouteIndex]);
+	}
+	ShowWaveLine(1, FString::Printf(TEXT("Wave %d%s | %s | budget %d | A %.2f"), CurrentWaveNumber,
+		CurrentWaveInfo.bIsPeakWave ? TEXT(" (peak wave)") : TEXT(""), *Template.Name.ToString(), CurrentWaveBudget, AdaptiveFactor));
+	ShowWaveLine(2, FString::Printf(TEXT("Mix: build-up %s | peak %s | relief %s"),
+		*DescribeEnemies(Settings, BuildUpEnemies), *DescribeEnemies(Settings, PeakEnemies), *DescribeEnemies(Settings, ReliefEnemies)));
+	ShowWaveLine(3, FString::Printf(TEXT("Play style: %.0f%% short range, %.0f%% long range, %.0f apart%s%s%s"),
+		WavePlayStyle.ShortRangeShare * 100.0f, WavePlayStyle.LongRangeShare * 100.0f, WavePlayStyle.AverageNearestDefenderDistance,
+		WavePlayStyle.bMostlyShortRange ? TEXT(" | mostly short range") : TEXT(""),
+		WavePlayStyle.bMostlyLongRange ? TEXT(" | mostly long range") : TEXT(""),
+		WavePlayStyle.bPackedTogether ? TEXT(" | packed") : TEXT("")));
+	ShowWaveLine(4, TEXT("Route weights: ") + (RouteText.IsEmpty() ? FString(TEXT("none")) : RouteText));
 
 	OnWaveStarted.Broadcast(CurrentWaveInfo);
 	BroadcastEnemiesRemaining();
@@ -293,7 +344,7 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 		if (ANightlightEnemy* const Enemy = EnemySpawner->SpawnEnemyOnRoute(Settings->Enemies[EntryIndex].EnemyClass, RouteIndex))
 		{
 			// A weak pointer, so an enemy destroyed without its EndPlay reaching us is still dropped later
-			// (Epic Games, Inc., 2026g).
+			// (Epic Games, Inc., 2026h).
 			WaveEnemies.Add(Enemy);
 			++EnemiesSpawnedThisWave;
 		}
@@ -311,7 +362,7 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 
 void ANightlightWaveDirector::UpdateRouteWeights()
 {
-	// The registry already lists the living defenders, so no actor search is needed (Epic Games, Inc., 2026f).
+	// The registry already lists the living defenders, so no actor search is needed (Epic Games, Inc., 2026g).
 	TArray<FVector> DefenderLocations;
 	TArray<float> DefenderRanges;
 	TArray<float> DefenderDps;
@@ -390,6 +441,13 @@ void ANightlightWaveDirector::TryFinishWave()
 	LastWaveSummary.AdaptiveFactorBefore = AdaptiveFactor;
 	AdaptiveFactor = UNightlightWaveMath::UpdateAdaptiveFactor(Settings, AdaptiveFactor, LastWaveSummary.PlayerScore);
 	LastWaveSummary.AdaptiveFactorAfter = AdaptiveFactor;
+
+	const FNightlightWaveMeasures& Measures = LastWaveSummary.Measures;
+	ShowWaveLine(6, FString::Printf(TEXT("Wave %d cleared in %.0f s: Core kept %s, stopped %s, clear time %s, tokens %s | score %.2f | A %.2f -> %.2f"),
+		CurrentWaveNumber, LastWaveSummary.ClearSeconds, *DescribeMeasure(Measures.CoreHealthKept), *DescribeMeasure(Measures.EnemiesStopped),
+		*DescribeMeasure(Measures.ClearTime), *DescribeMeasure(Measures.UnspentTokens), LastWaveSummary.PlayerScore,
+		LastWaveSummary.AdaptiveFactorBefore, LastWaveSummary.AdaptiveFactorAfter));
+	ShowWaveLine(7, FString::Printf(TEXT("Wave %d held spawns for %.1f s | highest challenge %.0f"), CurrentWaveNumber, HeldSpawnSeconds, HighestChallengeLevel));
 	OnWaveCleared.Broadcast(LastWaveSummary);
 
 	// Build-up, peak, then a calm build phase before the next wave (Booth, 2009).
@@ -424,7 +482,7 @@ FNightlightWaveMeasures ANightlightWaveDirector::BuildWaveMeasures(const float C
 int32 ANightlightWaveDirector::GetUnspentTokens_Implementation() const
 {
 	// The token pool lives in the Blueprint game state, so C++ cannot read it. The Blueprint child overrides
-	// this native event to return it (Epic Games, Inc., 2026h).
+	// this native event to return it (Epic Games, Inc., 2026j).
 	return -1;
 }
 
@@ -452,6 +510,7 @@ void ANightlightWaveDirector::SetWavePhase(const ENightlightWavePhase NewPhase)
 
 	WavePhase = NewPhase;
 	OnWavePhaseChanged.Broadcast(WavePhase);
+	ShowLiveLine();
 }
 
 void ANightlightWaveDirector::BroadcastEnemiesRemaining()
@@ -534,6 +593,7 @@ void ANightlightWaveDirector::UpdateChallengeLevel()
 
 	ChallengeLevel = UNightlightWaveMath::CalculateChallengeLevel(Settings, CoreDamageFraction, DefenderLostTimes.Num(), EnemiesNearCore);
 	HighestChallengeLevel = FMath::Max(HighestChallengeLevel, ChallengeLevel);
+	ShowLiveLine();
 	ReactToChallengeLevel();
 }
 
@@ -557,7 +617,7 @@ void ANightlightWaveDirector::ReactToChallengeLevel()
 			// Unpausing carries on with the time the spawn timer had left (Epic Games, Inc., 2026d).
 			EndHold();
 			GetWorldTimerManager().UnPauseTimer(SpawnTimerHandle);
-			OnChallengeReaction.Broadcast(ENightlightChallengeReaction::ResumedSpawns);
+			BroadcastChallengeReaction(ENightlightChallengeReaction::ResumedSpawns);
 		}
 		else if (Now - HoldStartTime >= Settings->MaxHoldSeconds)
 		{
@@ -572,7 +632,7 @@ void ANightlightWaveDirector::ReactToChallengeLevel()
 			UNightlightWaveMath::MovePhaseEnemiesToFront(*GetPhaseEnemies(WavePhase), ReliefEnemies);
 
 			bReliefCameEarly = true;
-			OnChallengeReaction.Broadcast(ENightlightChallengeReaction::ReliefEarly);
+			BroadcastChallengeReaction(ENightlightChallengeReaction::ReliefEarly);
 			StartPhase(ENightlightWavePhase::Relief);
 		}
 		return;
@@ -581,7 +641,7 @@ void ANightlightWaveDirector::ReactToChallengeLevel()
 	if (ChallengeLevel > Settings->HighChallengeThreshold && HasEnemiesToSpawn())
 	{
 		HoldSpawns();
-		OnChallengeReaction.Broadcast(ENightlightChallengeReaction::HeldSpawns);
+		BroadcastChallengeReaction(ENightlightChallengeReaction::HeldSpawns);
 		return;
 	}
 
@@ -593,9 +653,15 @@ void ANightlightWaveDirector::ReactToChallengeLevel()
 	{
 		UNightlightWaveMath::MovePhaseEnemiesToFront(BuildUpEnemies, PeakEnemies);
 		bPeakCameEarly = true;
-		OnChallengeReaction.Broadcast(ENightlightChallengeReaction::PeakEarly);
+		BroadcastChallengeReaction(ENightlightChallengeReaction::PeakEarly);
 		StartPhase(ENightlightWavePhase::Peak);
 	}
+}
+
+void ANightlightWaveDirector::BroadcastChallengeReaction(const ENightlightChallengeReaction Reaction)
+{
+	ShowWaveLine(5, FString::Printf(TEXT("Wave %d challenge %.0f: %s"), CurrentWaveNumber, ChallengeLevel, *UEnum::GetDisplayValueAsText(Reaction).ToString()));
+	OnChallengeReaction.Broadcast(Reaction);
 }
 
 void ANightlightWaveDirector::HoldSpawns()
@@ -617,6 +683,28 @@ void ANightlightWaveDirector::EndHold()
 	// Added to the clear-time target, so the player is not marked down for the time spawns were held.
 	HeldSpawnSeconds += GetWorld()->GetTimeSeconds() - HoldStartTime;
 	bSpawnsHeld = false;
+}
+
+void ANightlightWaveDirector::ShowWaveLine(const int32 Slot, const FString& Text, const bool bLog) const
+{
+	if (bLog)
+	{
+		UE_LOG(LogNightlightWaves, Log, TEXT("%s"), *Text);
+	}
+
+	// A fixed key makes the message replace its last copy, so the readout updates in place. Long enough to stay
+	// up through a build phase (Epic Games, Inc., 2026i).
+	if (bShowWaveDebug && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(WaveDebugKey + Slot, 600.0f, FColor::Cyan, Text);
+	}
+}
+
+void ANightlightWaveDirector::ShowLiveLine() const
+{
+	// Changes every second, so it stays on screen only and keeps the log readable.
+	ShowWaveLine(0, FString::Printf(TEXT("Wave %d | %s | challenge %.0f (highest %.0f)%s"), CurrentWaveNumber,
+		*UEnum::GetDisplayValueAsText(WavePhase).ToString(), ChallengeLevel, HighestChallengeLevel, bSpawnsHeld ? TEXT(" | spawns held") : TEXT("")), false);
 }
 
 void ANightlightWaveDirector::HandleEnemyRemoved(ANightlightEnemy* const Enemy)
@@ -690,15 +778,23 @@ Epic Games, Inc., 2026e. Gameplay Timers in Unreal Engine. [online] Available at
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026f. Programming Subsystems in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026f. Logging in Unreal Engine. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/logging-in-unreal-engine>
+[Accessed 2 October 2026].
+
+Epic Games, Inc., 2026g. Programming Subsystems in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/programming-subsystems-in-unreal-engine>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026g. TWeakObjectPtr. [online] Available at:
+Epic Games, Inc., 2026h. TWeakObjectPtr. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TWeakObjectPtr>
 [Accessed 1 October 2026].
 
-Epic Games, Inc., 2026h. UFunctions in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026i. UEngine::AddOnScreenDebugMessage. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UEngine/AddOnScreenDebugMessage>
+[Accessed 2 October 2026].
+
+Epic Games, Inc., 2026j. UFunctions in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
 [Accessed 1 October 2026].
 

@@ -431,9 +431,9 @@ Epic Games, Inc., 2026a. AActor::SetLifeSpan. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/SetLifeSpan>
 [Accessed 30 September 2026].
 
-Epic Games, Inc., 2026b. FMath::VInterpConstantTo. [online] Available at:
-<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/VInterpConstantTo>
-[Accessed 31 August 2026].
+Epic Games, Inc., 2026b. FMath. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath>
+[Accessed 2 October 2026].
 
 Epic Games, Inc., 2026c. Gameplay Timers in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>

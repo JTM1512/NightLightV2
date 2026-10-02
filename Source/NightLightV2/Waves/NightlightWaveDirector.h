@@ -237,12 +237,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves")
 	TObjectPtr<UNightlightWaveSettings> WaveSettings;
 
-	// The spawner placed in the level. Untick its Spawn On Begin Play so only the director spawns.
+	// The spawner placed in the level. It only spawns when the director asks.
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Nightlight|Waves")
 	TObjectPtr<ANightlightEnemySpawner> EnemySpawner;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
 	bool bStartOnBeginPlay = true;
+
+	// Shows the wave readout on screen, updated in place, for balance sessions. Off by default so the HUD stays
+	// clean. The readout always goes to the Output Log under LogNightlightWaves.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	bool bShowWaveDebug = false;
 
 private:
 	// Settings->Enemies indices still to spawn in each phase. Kept as members so the challenge level can move
@@ -327,6 +332,11 @@ private:
 	void HoldSpawns();
 	void EndHold();
 	void ReactToChallengeLevel();
+	void BroadcastChallengeReaction(ENightlightChallengeReaction Reaction);
+
+	// Logs one readout line and, with Show Wave Debug on, shows it on screen in its own fixed slot.
+	void ShowWaveLine(int32 Slot, const FString& Text, bool bLog = true) const;
+	void ShowLiveLine() const;
 
 	UFUNCTION()
 	void HandleEnemyRemoved(ANightlightEnemy* Enemy);

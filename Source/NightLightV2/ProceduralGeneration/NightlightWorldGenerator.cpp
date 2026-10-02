@@ -888,29 +888,29 @@ int32 ANightlightWorldGenerator::GetCellIndex(const int32 X, const int32 Y, cons
 References
 
 Epic Games, Inc., 2026a. Create Mesh Section. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Components/ProceduralMesh/CreateMeshSection>
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI/Components/ProceduralMesh/CreateMeshSection>
 [Accessed 30 August 2026].
 
 Epic Games, Inc., 2026b. Exposing Gameplay Elements to Blueprints Visual
 Scripting in Unreal Engine. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/exposing-gameplay-elements-to-blueprints-visual-scripting-in-unreal-engine>
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/exposing-gameplay-elements-to-blueprints-visual-scripting-in-unreal-engine>
 [Accessed 30 August 2026].
 
 Epic Games, Inc., 2026c. FMath::Lerp. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/Lerp>
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/Lerp>
 [Accessed 28 August 2026].
 
 Epic Games, Inc., 2026d. FMath::PerlinNoise2D. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/FMath/PerlinNoise2D>
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath/PerlinNoise2D>
 [Accessed 28 August 2026].
 
 Epic Games, Inc., 2026e. Random Streams in Unreal Engine. [online] Available at:
-<https://dev.epicgames.com/documentation/unreal-engine/random-streams-in-unreal-engine>
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/random-streams-in-unreal-engine>
 [Accessed 28 August 2026].
 
-Epic Games, Inc., 2026f. TTransform::TransformPosition. [online] Available at:
-<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/Math/TTransform/TransformPosition>
-[Accessed 30 August 2026].
+Epic Games, Inc., 2026f. TTransform. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TTransform>
+[Accessed 2 October 2026].
 
 fettis GameDev, 2022. Terrain generation in C++ for Beginners - Unreal Engine
 tutorial. [video online] Available at: <https://www.youtube.com/watch?v=sNZ2g4qah28>

@@ -465,6 +465,73 @@ bool FNightlightWaveTemplatesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWavePlanTest,
+	"Nightlight.Waves.Plan",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWavePlanTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	// Waves 1 to 12 planned in the same order as the director, at A = 1 against a fixed long-range build.
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+	FNightlightPlayStyle PlayStyle;
+	PlayStyle.LongRangeShare = 1.0f;
+	PlayStyle.bMostlyLongRange = true;
+	FRandomStream Stream(2026);
+	TArray<int32> Budgets = { 0 };
+	FName PreviousTemplate;
+	int32 LastNormalBudget = 0;
+
+	for (int32 WaveNumber = 1; WaveNumber <= 12; ++WaveNumber)
+	{
+		const int32 Budget = UNightlightWaveMath::CalculateWaveBudget(Settings, WaveNumber, 1.0f);
+		const FNightlightWaveTemplate Chosen = UNightlightWaveMath::ChooseTemplate(Settings, WaveNumber, PlayStyle, PreviousTemplate, Stream);
+		const FName Template = Chosen.Name;
+		const TArray<int32> Plan = UNightlightWaveMath::PlanWaveEnemies(Settings, WaveNumber, Budget, Chosen.Weights, Stream);
+		const FNightlightWavePhaseLists Lists = UNightlightWaveMath::SplitIntoPhases(Settings, Plan, Stream);
+		const bool bPeakWave = UNightlightWaveMath::IsBruteWave(Settings, WaveNumber);
+
+		TestFalse(FString::Printf(TEXT("Wave %d has no Shade before wave 3"), WaveNumber), WaveNumber < 3 && ContainsRole(Settings, Plan, ENightlightWaveEnemyRole::Shade));
+		TestFalse(FString::Printf(TEXT("Wave %d has no Brute before wave 5"), WaveNumber), WaveNumber < 5 && ContainsRole(Settings, Plan, ENightlightWaveEnemyRole::Brute));
+		TestEqual(FString::Printf(TEXT("Wave %d spends its whole budget"), WaveNumber), SumThreatCost(Settings, Plan), Budget);
+
+		// Sorting both lists shows the split kept every planned enemy exactly once.
+		TArray<int32> Combined = Lists.BuildUp;
+		Combined.Append(Lists.Peak);
+		Combined.Append(Lists.Relief);
+		Combined.Sort();
+		TArray<int32> SortedPlan = Plan;
+		SortedPlan.Sort();
+		TestTrue(FString::Printf(TEXT("Wave %d's split keeps every planned enemy"), WaveNumber), Combined == SortedPlan);
+
+		// Peak waves are always Siege. Waves 1 and 2 only have Swarm unlocked, so the no-repeat rule starts at wave 3.
+		if (bPeakWave)
+		{
+			TestEqual(FString::Printf(TEXT("Wave %d is Siege"), WaveNumber), Template, FName(TEXT("Siege")));
+		}
+		else
+		{
+			TestTrue(FString::Printf(TEXT("Wave %d does not repeat its template"), WaveNumber), WaveNumber < 3 || Template != PreviousTemplate);
+			TestTrue(FString::Printf(TEXT("Wave %d's budget is not below the last normal wave"), WaveNumber), Budget >= LastNormalBudget);
+			LastNormalBudget = Budget;
+		}
+
+		Budgets.Add(Budget);
+		PreviousTemplate = Template;
+	}
+
+	// The peak waves are bigger than the waves either side of them.
+	for (const int32 PeakWave : { 5, 10 })
+	{
+		TestTrue(FString::Printf(TEXT("Wave %d has a larger budget than the waves either side"), PeakWave),
+			Budgets[PeakWave] > Budgets[PeakWave - 1] && Budgets[PeakWave] > Budgets[PeakWave + 1]);
+	}
+
+	return true;
+}
+
 #endif
 
 /*
