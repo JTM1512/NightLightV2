@@ -4,24 +4,33 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Math/RandomStream.h"
 #include "NightlightWaveSettings.h"
+#include "../Defenders/NightlightDefender.h"
 #include "NightlightWaveMath.generated.h"
 
-// Multipliers on each role's base weight. The play-style counters fill these in from the player's defender layout.
+// How the player has built, read from the living defenders before each wave.
 USTRUCT(BlueprintType)
-struct NIGHTLIGHTV2_API FNightlightEnemyMixWeights
+struct NIGHTLIGHTV2_API FNightlightPlayStyle
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
-	float Walker = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float ShortRangeShare = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
-	float Shade = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float LongRangeShare = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
-	float Brute = 1.0f;
+	// 0 with fewer than two defenders.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	float AverageNearestDefenderDistance = 0.0f;
 
-	float GetWeightForRole(ENightlightWaveEnemyRole Role) const;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	bool bMostlyShortRange = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	bool bMostlyLongRange = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	bool bPackedTogether = false;
 };
 
 // Where the wave director is in its loop. The HUD can show a different message for each one.
@@ -194,4 +203,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	static TArray<float> ApplyRoleRoutePreference(const UNightlightWaveSettings* Settings, ENightlightWaveEnemyRole Role,
 		const TArray<float>& BaseWeights, const TArray<float>& RouteLengths);
+
+	// Style shares and how tightly the defenders are packed. The two arrays line up by index.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static FNightlightPlayStyle AnalysePlayStyle(const UNightlightWaveSettings* Settings,
+		const TArray<FVector>& DefenderLocations, const TArray<ENightlightDefenderStyle>& DefenderStyles);
+
+	// PeakWaveTemplate on a Brute wave. Otherwise a weighted pick among the unlocked templates except the previous
+	// one, with a bonus for each that counters the play style. An empty template when there is none.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static FNightlightWaveTemplate ChooseTemplate(const UNightlightWaveSettings* Settings, int32 WaveNumber,
+		const FNightlightPlayStyle& PlayStyle, FName PreviousTemplateName, UPARAM(ref) FRandomStream& RandomStream);
 };

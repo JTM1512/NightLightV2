@@ -47,6 +47,60 @@ struct NIGHTLIGHTV2_API FNightlightWaveEnemyEntry
 	ENightlightWaveEnemyRole Role = ENightlightWaveEnemyRole::Walker;
 };
 
+// Multipliers on each role's base weight. Each wave template sets these to shift the enemy mix.
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightEnemyMixWeights
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
+	float Walker = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
+	float Shade = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves", meta = (ClampMin = "0.0"))
+	float Brute = 1.0f;
+
+	float GetWeightForRole(ENightlightWaveEnemyRole Role) const;
+};
+
+// The play style a wave template is picked to counter.
+UENUM(BlueprintType)
+enum class ENightlightWaveTemplateCounter : uint8
+{
+	None,
+
+	// Mostly short-range defenders, such as Pulse.
+	ShortRange,
+
+	// Mostly long-range defenders, such as Shooters.
+	LongRange,
+
+	// Defenders packed close together.
+	Packed
+};
+
+// JTM1512's wave templates, each picked more often when it counters how the player has built (Epic Games, Inc., 2026b).
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightWaveTemplate
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves")
+	FName Name;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves", meta = (ClampMin = "1"))
+	int32 UnlockWave = 1;
+
+	// Multiplied onto each unlocked enemy type's base weight while planning the wave.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves")
+	FNightlightEnemyMixWeights Weights;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves")
+	ENightlightWaveTemplateCounter Counters = ENightlightWaveTemplateCounter::None;
+};
+
 // Every wave tuning number in one asset, so the balance pass never needs a C++ change. The defaults match
 // the planning document, so the game still works before DA_WaveSettings is made (Epic Games, Inc., 2026a).
 UCLASS(BlueprintType)
@@ -140,9 +194,32 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Brute Waves", meta = (ClampMin = "1.0"))
 	float BruteWaveBudgetMultiplier = 1.25f;
 
-	// How strongly a Brute wave favours Brutes. The planning document gives no number, so this is our default.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Brute Waves", meta = (ClampMin = "1.0"))
-	float BruteWaveBruteWeightMultiplier = 3.0f;
+	// Swarm, Skirmish and Siege by default. An array, so another template can be added in the editor.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates")
+	TArray<FNightlightWaveTemplate> Templates;
+
+	// Every Brute wave is forced to this template, which is what makes it lean towards Brutes.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates")
+	FName PeakWaveTemplate = TEXT("Siege");
+
+	// Every unlocked template's weight, plus the bonus when it counters the player's play style.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates", meta = (ClampMin = "0.0"))
+	float BaseTemplateWeight = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates", meta = (ClampMin = "0.0"))
+	float CounterTemplateBonus = 2.0f;
+
+	// More than this share of the living defenders being one style counts as mostly that style.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float MostlyStyleShare = 0.5f;
+
+	// Defenders are packed when there are at least MinDefendersForCluster of them and their average distance
+	// to their nearest neighbour is below this.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates", meta = (ClampMin = "0.0"))
+	float ClusterDistance = 500.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Templates", meta = (ClampMin = "2"))
+	int32 MinDefendersForCluster = 3;
 
 	// A longer first build phase so the player can read the map and place defenders.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Build Phase", meta = (ClampMin = "0.0"))

@@ -373,6 +373,98 @@ bool FNightlightWaveRouteWeightsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWaveTemplatesTest,
+	"Nightlight.Waves.Templates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWaveTemplatesTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+	using EStyle = ENightlightDefenderStyle;
+	const TArray<FVector> Close = { FVector::ZeroVector, FVector(200.0f, 0.0f, 0.0f), FVector(400.0f, 0.0f, 0.0f) };
+	const TArray<FVector> Apart = { FVector::ZeroVector, FVector(2000.0f, 0.0f, 0.0f), FVector(4000.0f, 0.0f, 0.0f) };
+
+	// How often each template is picked for wave 6 over 200 rolls, after a Siege wave 5.
+	const auto CountPicks = [Settings](const FNightlightPlayStyle& PlayStyle, const FName Name)
+	{
+		FRandomStream Stream(11);
+		int32 Picks = 0;
+		for (int32 Roll = 0; Roll < 200; ++Roll)
+		{
+			Picks += UNightlightWaveMath::ChooseTemplate(Settings, 6, PlayStyle, TEXT("Siege"), Stream).Name == Name ? 1 : 0;
+		}
+		return Picks;
+	};
+
+	const FNightlightPlayStyle ShortRange = UNightlightWaveMath::AnalysePlayStyle(Settings, Apart, { EStyle::ShortRange, EStyle::ShortRange, EStyle::ShortRange });
+	const FNightlightPlayStyle LongRange = UNightlightWaveMath::AnalysePlayStyle(Settings, Apart, { EStyle::LongRange, EStyle::LongRange, EStyle::LongRange });
+	const FNightlightPlayStyle Packed = UNightlightWaveMath::AnalysePlayStyle(Settings, Close, { EStyle::Standard, EStyle::Standard, EStyle::Standard });
+	const FNightlightPlayStyle Spread = UNightlightWaveMath::AnalysePlayStyle(Settings, Apart, { EStyle::Standard, EStyle::Standard, EStyle::Standard });
+	TestTrue(TEXT("Three Pulse-style defenders are mostly short range"), ShortRange.bMostlyShortRange && !ShortRange.bMostlyLongRange);
+	TestTrue(TEXT("Three Shooter-style defenders are mostly long range"), LongRange.bMostlyLongRange && !LongRange.bMostlyShortRange);
+	TestTrue(TEXT("Three defenders 200 apart are packed"), Packed.bPackedTogether);
+	TestEqual(TEXT("Their nearest neighbours average 200 apart"), Packed.AverageNearestDefenderDistance, 200.0f, KINDA_SMALL_NUMBER);
+	TestFalse(TEXT("The same three 2000 apart are not packed"), Spread.bPackedTogether);
+	TestTrue(TEXT("Short range favours Skirmish"), CountPicks(ShortRange, TEXT("Skirmish")) > CountPicks(ShortRange, TEXT("Swarm")));
+	TestTrue(TEXT("Long range favours Swarm"), CountPicks(LongRange, TEXT("Swarm")) > CountPicks(LongRange, TEXT("Skirmish")));
+
+	// Packed defenders favour Siege on a wave where it is allowed, here after a Swarm wave 7.
+	FRandomStream Stream(5);
+	int32 SiegePicks = 0;
+	for (int32 Roll = 0; Roll < 200; ++Roll)
+	{
+		SiegePicks += UNightlightWaveMath::ChooseTemplate(Settings, 8, Packed, TEXT("Swarm"), Stream).Name == TEXT("Siege") ? 1 : 0;
+	}
+	TestTrue(TEXT("Packed defenders favour Siege"), SiegePicks > 100);
+
+	// Brute waves are always Siege, and waves 1 and 2 only have Swarm unlocked.
+	for (int32 Roll = 0; Roll < 20; ++Roll)
+	{
+		TestEqual(TEXT("Wave 5 is Siege"), UNightlightWaveMath::ChooseTemplate(Settings, 5, LongRange, TEXT("Siege"), Stream).Name, FName(TEXT("Siege")));
+		TestEqual(TEXT("Wave 10 is Siege"), UNightlightWaveMath::ChooseTemplate(Settings, 10, ShortRange, TEXT("Swarm"), Stream).Name, FName(TEXT("Siege")));
+		TestEqual(TEXT("Wave 1 is Swarm"), UNightlightWaveMath::ChooseTemplate(Settings, 1, Packed, NAME_None, Stream).Name, FName(TEXT("Swarm")));
+		TestEqual(TEXT("Wave 2 is Swarm"), UNightlightWaveMath::ChooseTemplate(Settings, 2, Packed, TEXT("Swarm"), Stream).Name, FName(TEXT("Swarm")));
+	}
+
+	// From wave 6 on, no non-Brute wave repeats the template before it, even with packed defenders pulling to Siege.
+	FName Previous = TEXT("Siege");
+	bool bRepeated = false;
+	for (int32 WaveNumber = 6, Checked = 0; Checked < 50; ++WaveNumber)
+	{
+		const FName Name = UNightlightWaveMath::ChooseTemplate(Settings, WaveNumber, Packed, Previous, Stream).Name;
+		if (!UNightlightWaveMath::IsBruteWave(Settings, WaveNumber))
+		{
+			bRepeated |= Name == Previous;
+			++Checked;
+		}
+		Previous = Name;
+	}
+	TestFalse(TEXT("No template runs twice in a row"), bRepeated);
+
+	// The wave 6 budget of 24 planned with each template's weights over 50 seeds, counting the Shades.
+	const auto CountShades = [Settings](const FName Name)
+	{
+		const FNightlightWaveTemplate* const Template = Settings->Templates.FindByPredicate(
+			[Name](const FNightlightWaveTemplate& Entry) { return Entry.Name == Name; });
+		int32 Shades = 0;
+		for (int32 Seed = 1; Seed <= 50 && Template; ++Seed)
+		{
+			FRandomStream PlanStream(Seed);
+			for (const int32 EntryIndex : UNightlightWaveMath::PlanWaveEnemies(Settings, 6, 24, Template->Weights, PlanStream))
+			{
+				Shades += Settings->Enemies[EntryIndex].Role == ENightlightWaveEnemyRole::Shade ? 1 : 0;
+			}
+		}
+		return Shades;
+	};
+	TestTrue(TEXT("A Skirmish wave 6 has more Shades than a Swarm wave 6"), CountShades(TEXT("Skirmish")) > CountShades(TEXT("Swarm")));
+
+	return true;
+}
+
 #endif
 
 /*

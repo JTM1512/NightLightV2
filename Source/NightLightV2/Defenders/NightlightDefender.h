@@ -19,6 +19,15 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FNightlightDefenderDamagedSignature,
 	float, DamageAmount);
 
+// How a defender fights, so the wave director can pick a wave template that counters the player's build.
+UENUM(BlueprintType)
+enum class ENightlightDefenderStyle : uint8
+{
+	Standard,
+	ShortRange,
+	LongRange
+};
+
 // Every defender Blueprint is parented to this class, so enemies can damage any defender type the same way.
 UCLASS(Blueprintable)
 class NIGHTLIGHTV2_API ANightlightDefender : public AActor
@@ -56,6 +65,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender|Attack")
 	float GetDamagePerSecond() const;
 
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
+	ENightlightDefenderStyle GetDefenderStyle() const { return DefenderStyle; }
+
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Defender")
 	FNightlightDefenderHealthChangedSignature OnHealthChanged;
 
@@ -77,6 +89,10 @@ protected:
 	// Same names as the old BP_Defender variables so the Blueprint can be reparented without renaming nodes.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender", meta = (ClampMin = "0.0"))
 	float MaxHealth = 100.0f;
+
+	// Each defender Blueprint sets its own style in its class defaults.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Nightlight|Defender")
+	ENightlightDefenderStyle DefenderStyle = ENightlightDefenderStyle::Standard;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Defender")
 	float CurrentHealth = 100.0f;

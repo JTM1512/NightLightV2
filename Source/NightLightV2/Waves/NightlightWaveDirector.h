@@ -26,11 +26,11 @@ struct NIGHTLIGHTV2_API FNightlightWaveInfo
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	int32 EnemyCount = 0;
 
-	// Every fifth wave has a bigger budget and leans towards Brutes.
+	// Every fifth wave has a bigger budget and is always a Siege.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	bool bIsPeakWave = false;
 
-	// Empty until the wave templates are added.
+	// Swarm, Skirmish or Siege with the default settings.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	FName TemplateName;
 };
@@ -100,6 +100,13 @@ struct NIGHTLIGHTV2_API FNightlightWaveSummary
 	// Each route's spawn weight for the wave, before the Brute and Shade route preferences, by route index.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	TArray<float> RouteWeights;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	FName TemplateName;
+
+	// How the player had built when the wave's template was chosen.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	FNightlightPlayStyle PlayStyle;
 };
 
 // How the director changed the pacing after a challenge level check.
@@ -298,6 +305,7 @@ private:
 	TArray<float> RouteDefence;
 	TArray<float> RouteBaseWeights;
 
+	FNightlightPlayStyle WavePlayStyle;
 	FNightlightWaveInfo CurrentWaveInfo;
 	FNightlightWaveSummary LastWaveSummary;
 

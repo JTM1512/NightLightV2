@@ -15,6 +15,24 @@ namespace
 		Entry.BaseWeight = BaseWeight;
 		return Entry;
 	}
+
+	FNightlightWaveTemplate MakeTemplate(
+		const FName Name,
+		const int32 UnlockWave,
+		const float Walker,
+		const float Shade,
+		const float Brute,
+		const ENightlightWaveTemplateCounter Counters)
+	{
+		FNightlightWaveTemplate Template;
+		Template.Name = Name;
+		Template.UnlockWave = UnlockWave;
+		Template.Weights.Walker = Walker;
+		Template.Weights.Shade = Shade;
+		Template.Weights.Brute = Brute;
+		Template.Counters = Counters;
+		return Template;
+	}
 }
 
 UNightlightWaveSettings::UNightlightWaveSettings()
@@ -24,6 +42,12 @@ UNightlightWaveSettings::UNightlightWaveSettings()
 	Enemies.Add(MakeEnemyEntry(ENightlightWaveEnemyRole::Walker, 1, 1, 1.0f));
 	Enemies.Add(MakeEnemyEntry(ENightlightWaveEnemyRole::Shade, 2, 3, 0.6f));
 	Enemies.Add(MakeEnemyEntry(ENightlightWaveEnemyRole::Brute, 4, 5, 0.3f));
+
+	// Swarm floods long-range builds, Skirmish's Shades outrange short-range builds and Siege's Brutes hit
+	// packed builds with area damage, so the waves adapt to how the player builds (Hunicke and Chapman, 2004).
+	Templates.Add(MakeTemplate(TEXT("Swarm"), 1, 2.0f, 1.0f, 1.0f, ENightlightWaveTemplateCounter::LongRange));
+	Templates.Add(MakeTemplate(TEXT("Skirmish"), 3, 1.0f, 2.0f, 1.0f, ENightlightWaveTemplateCounter::ShortRange));
+	Templates.Add(MakeTemplate(TEXT("Siege"), 5, 1.0f, 1.5f, 2.0f, ENightlightWaveTemplateCounter::Packed));
 }
 
 /*

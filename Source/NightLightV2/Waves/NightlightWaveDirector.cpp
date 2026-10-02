@@ -158,10 +158,25 @@ void ANightlightWaveDirector::StartWave()
 	const UNightlightWaveSettings* const Settings = GetSettings();
 	CurrentWaveBudget = UNightlightWaveMath::CalculateWaveBudget(Settings, CurrentWaveNumber, AdaptiveFactor);
 
-	// Neutral weights until the play-style counters are added.
-	const FNightlightEnemyMixWeights MixWeights;
+	// Read how the player has built from the living defenders, then pick a template that counters it
+	// (Epic Games, Inc., 2026f).
+	TArray<FVector> DefenderLocations;
+	TArray<ENightlightDefenderStyle> DefenderStyles;
+	if (const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>())
+	{
+		for (const ANightlightDefender* const Defender : Registry->GetDefenders())
+		{
+			DefenderLocations.Add(Defender->GetActorLocation());
+			DefenderStyles.Add(Defender->GetDefenderStyle());
+		}
+	}
+	WavePlayStyle = UNightlightWaveMath::AnalysePlayStyle(Settings, DefenderLocations, DefenderStyles);
+
+	// CurrentWaveInfo still holds the last wave here, so its template is the one not to repeat.
+	const FNightlightWaveTemplate Template = UNightlightWaveMath::ChooseTemplate(
+		Settings, CurrentWaveNumber, WavePlayStyle, CurrentWaveInfo.TemplateName, WaveRandomStream);
 	const TArray<int32> PlannedEntries = UNightlightWaveMath::PlanWaveEnemies(
-		Settings, CurrentWaveNumber, CurrentWaveBudget, MixWeights, WaveRandomStream);
+		Settings, CurrentWaveNumber, CurrentWaveBudget, Template.Weights, WaveRandomStream);
 
 	const FNightlightWavePhaseLists PhaseLists = UNightlightWaveMath::SplitIntoPhases(Settings, PlannedEntries, WaveRandomStream);
 	BuildUpEnemies = PhaseLists.BuildUp;
@@ -194,6 +209,7 @@ void ANightlightWaveDirector::StartWave()
 	CurrentWaveInfo.WaveNumber = CurrentWaveNumber;
 	CurrentWaveInfo.EnemyCount = PlannedEntries.Num();
 	CurrentWaveInfo.bIsPeakWave = UNightlightWaveMath::IsBruteWave(Settings, CurrentWaveNumber);
+	CurrentWaveInfo.TemplateName = Template.Name;
 
 	if (PlannedEntries.IsEmpty())
 	{
@@ -362,6 +378,8 @@ void ANightlightWaveDirector::TryFinishWave()
 	LastWaveSummary.HighestChallengeLevel = HighestChallengeLevel;
 	LastWaveSummary.RouteDefence = RouteDefence;
 	LastWaveSummary.RouteWeights = RouteBaseWeights;
+	LastWaveSummary.TemplateName = CurrentWaveInfo.TemplateName;
+	LastWaveSummary.PlayStyle = WavePlayStyle;
 	ChallengeLevel = 0.0f;
 
 	// Score how the player handled the wave and nudge A, which scales the next wave's budget

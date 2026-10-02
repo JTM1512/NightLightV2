@@ -93,7 +93,6 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 	FRandomStream& RandomStream)
 {
 	Settings = GetSettingsOrDefault(Settings);
-	const bool bBruteWave = IsBruteWave(Settings, WaveNumber);
 
 	TArray<int32> PlannedEntries;
 	TArray<int32> CandidateIndices;
@@ -117,12 +116,8 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 				continue;
 			}
 
-			float Weight = Entry.BaseWeight * TypeWeightMultipliers.GetWeightForRole(Entry.Role);
-			if (bBruteWave && Entry.Role == ENightlightWaveEnemyRole::Brute)
-			{
-				Weight *= Settings->BruteWaveBruteWeightMultiplier;
-			}
-
+			// The wave template's multipliers shift the mix, but only among the types already unlocked.
+			const float Weight = Entry.BaseWeight * TypeWeightMultipliers.GetWeightForRole(Entry.Role);
 			if (Weight <= 0.0f)
 			{
 				continue;
@@ -444,6 +439,91 @@ TArray<float> UNightlightWaveMath::ApplyRoleRoutePreference(
 
 	Weights[PreferredIndex] *= bBrute ? Settings->BruteShortestRouteMultiplier : Settings->ShadeLongestRouteMultiplier;
 	return Weights;
+}
+
+FNightlightPlayStyle UNightlightWaveMath::AnalysePlayStyle(
+	const UNightlightWaveSettings* Settings,
+	const TArray<FVector>& DefenderLocations,
+	const TArray<ENightlightDefenderStyle>& DefenderStyles)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	FNightlightPlayStyle PlayStyle;
+	const int32 DefenderCount = FMath::Min(DefenderLocations.Num(), DefenderStyles.Num());
+	if (DefenderCount == 0)
+	{
+		return PlayStyle;
+	}
+
+	// A plain double loop finds each defender's nearest neighbour, which is cheap for the few anchors a map has.
+	float NearestDistanceTotal = 0.0f;
+	for (int32 DefenderIndex = 0; DefenderIndex < DefenderCount; ++DefenderIndex)
+	{
+		PlayStyle.ShortRangeShare += DefenderStyles[DefenderIndex] == ENightlightDefenderStyle::ShortRange ? 1.0f : 0.0f;
+		PlayStyle.LongRangeShare += DefenderStyles[DefenderIndex] == ENightlightDefenderStyle::LongRange ? 1.0f : 0.0f;
+
+		float NearestDistance = MAX_flt;
+		for (int32 OtherIndex = 0; OtherIndex < DefenderCount; ++OtherIndex)
+		{
+			if (OtherIndex != DefenderIndex)
+			{
+				NearestDistance = FMath::Min(NearestDistance, FVector::Dist(DefenderLocations[DefenderIndex], DefenderLocations[OtherIndex]));
+			}
+		}
+		NearestDistanceTotal += DefenderCount > 1 ? NearestDistance : 0.0f;
+	}
+
+	PlayStyle.ShortRangeShare /= DefenderCount;
+	PlayStyle.LongRangeShare /= DefenderCount;
+	PlayStyle.AverageNearestDefenderDistance = NearestDistanceTotal / DefenderCount;
+	PlayStyle.bMostlyShortRange = PlayStyle.ShortRangeShare > Settings->MostlyStyleShare;
+	PlayStyle.bMostlyLongRange = PlayStyle.LongRangeShare > Settings->MostlyStyleShare;
+	PlayStyle.bPackedTogether = DefenderCount >= Settings->MinDefendersForCluster
+		&& PlayStyle.AverageNearestDefenderDistance < Settings->ClusterDistance;
+	return PlayStyle;
+}
+
+FNightlightWaveTemplate UNightlightWaveMath::ChooseTemplate(
+	const UNightlightWaveSettings* Settings,
+	const int32 WaveNumber,
+	const FNightlightPlayStyle& PlayStyle,
+	const FName PreviousTemplateName,
+	FRandomStream& RandomStream)
+{
+	Settings = GetSettingsOrDefault(Settings);
+
+	// Every Brute wave is a Siege, so the peak is always the heaviest wave (Booth, 2009).
+	const FNightlightWaveTemplate* const PeakTemplate = Settings->Templates.FindByPredicate(
+		[Settings](const FNightlightWaveTemplate& Template) { return Template.Name == Settings->PeakWaveTemplate; });
+	if (PeakTemplate && IsBruteWave(Settings, WaveNumber))
+	{
+		return *PeakTemplate;
+	}
+
+	// The first pass leaves out the previous template. If that leaves nothing, as on waves 1 and 2 with only
+	// Swarm unlocked, the second pass allows it again.
+	TArray<int32> CandidateIndices;
+	TArray<float> CandidateWeights;
+	for (int32 Pass = 0; Pass < 2 && CandidateIndices.IsEmpty(); ++Pass)
+	{
+		for (int32 TemplateIndex = 0; TemplateIndex < Settings->Templates.Num(); ++TemplateIndex)
+		{
+			const FNightlightWaveTemplate& Template = Settings->Templates[TemplateIndex];
+			if (WaveNumber < Template.UnlockWave || (Pass == 0 && Template.Name == PreviousTemplateName))
+			{
+				continue;
+			}
+
+			// Templates that counter how the player has built are picked more often (Hunicke and Chapman, 2004).
+			const bool bCounters = (Template.Counters == ENightlightWaveTemplateCounter::ShortRange && PlayStyle.bMostlyShortRange)
+				|| (Template.Counters == ENightlightWaveTemplateCounter::LongRange && PlayStyle.bMostlyLongRange)
+				|| (Template.Counters == ENightlightWaveTemplateCounter::Packed && PlayStyle.bPackedTogether);
+			CandidateIndices.Add(TemplateIndex);
+			CandidateWeights.Add(Settings->BaseTemplateWeight + (bCounters ? Settings->CounterTemplateBonus : 0.0f));
+		}
+	}
+
+	const int32 PickedSlot = PickWeightedIndex(CandidateWeights, RandomStream);
+	return PickedSlot != INDEX_NONE ? Settings->Templates[CandidateIndices[PickedSlot]] : FNightlightWaveTemplate();
 }
 
 /*
