@@ -88,6 +88,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float WaypointAcceptanceDistance = 10.0f;
 
+	// How quickly the enemy turns to keep facing the Dream Core. Zero snaps straight to it.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
+	float TurnSpeed = 8.0f;
+
+	// The enemy floats this far above the terrain and stays level. Zero walks on the slope instead.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
+	float HoverHeight = 40.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy", meta = (ClampMin = "0.0"))
 	float MaxHealth = 100.0f;
 
@@ -180,6 +188,9 @@ private:
 	FTimerHandle DefenderAttackTimerHandle;
 	float TimeUntilDefenderSearch = 0.0f;
 
+	// The middle of the Core's meshes, because the tower mesh's pivot sits on one corner.
+	FVector CoreFacingLocation = FVector::ZeroVector;
+
 	// Created on the first hit, so enemies that are never hit keep sharing their original materials.
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> HitFlashMaterials;
@@ -196,4 +207,5 @@ private:
 	bool UpdateDefenderCombat(float DeltaTime);
 	void AttackTargetDefender();
 	void ReachNextWaypoint();
+	void FaceCoreOnTerrain(float DeltaTime);
 };

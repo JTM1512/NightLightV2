@@ -2,6 +2,7 @@
 #include "../Core/NightlightDreamCore.h"
 #include "../Defenders/NightlightDefender.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../Systems/NightlightTerrainUtils.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/MeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -44,7 +45,7 @@ void ANightlightEnemy::BeginPlay()
 void ANightlightEnemy::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// EndPlay runs when the enemy dies, reaches the Core or the level ends, so this one call covers
-	// every way an enemy leaves play (Epic Games, Inc., 2026h). A dead enemy has already left the
+	// every way an enemy leaves play (Epic Games, Inc., 2026i). A dead enemy has already left the
 	// registry in Die, and a second removal is ignored.
 	if (UWorld* const World = GetWorld())
 	{
@@ -61,12 +62,12 @@ void ANightlightEnemy::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ANightlightEnemy::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (UpdateDefenderCombat(DeltaTime) && ShouldStopForDefender())
+	if (!UpdateDefenderCombat(DeltaTime) || !ShouldStopForDefender())
 	{
-		return;
+		MoveAlongRoute(DeltaTime);
 	}
 
-	MoveAlongRoute(DeltaTime);
+	FaceCoreOnTerrain(DeltaTime);
 }
 
 float ANightlightEnemy::TakeDamage(
@@ -82,7 +83,13 @@ float ANightlightEnemy::TakeDamage(
 
 void ANightlightEnemy::AssignRoute(const TArray<FVector>& RoutePoints)
 {
+	// Raising the copied points by the hover height lets the enemy still reach each point while it floats.
 	AssignedRoutePoints = RoutePoints;
+	for (FVector& RoutePoint : AssignedRoutePoints)
+	{
+		RoutePoint.Z += HoverHeight;
+	}
+
 	CurrentWaypointIndex = INDEX_NONE;
 	bHasReachedCore = false;
 	SetActorTickEnabled(false);
@@ -99,6 +106,7 @@ void ANightlightEnemy::AssignRoute(const TArray<FVector>& RoutePoints)
 
 	// The first point is the Rift spawn position, so movement starts at point one.
 	SetActorLocation(AssignedRoutePoints[0]);
+	FaceCoreOnTerrain(0.0f);
 	CurrentWaypointIndex = 1;
 	SetActorTickEnabled(true);
 }
@@ -106,6 +114,33 @@ void ANightlightEnemy::AssignRoute(const TArray<FVector>& RoutePoints)
 void ANightlightEnemy::AssignDreamCore(ANightlightDreamCore* const InDreamCore)
 {
 	DreamCore = InDreamCore;
+	if (IsValid(DreamCore))
+	{
+		// Only colliding parts count, so the Core's health bar does not pull the point upwards
+		// (Epic Games, Inc., 2026a).
+		CoreFacingLocation = DreamCore->GetComponentsBoundingBox().GetCenter();
+	}
+}
+
+void ANightlightEnemy::FaceCoreOnTerrain(const float DeltaTime)
+{
+	// Movement can end at the Core, which destroys the enemy, and a dying enemy stays where it fell.
+	if (bIsDead || bHasReachedCore)
+	{
+		return;
+	}
+
+	// A new route snaps straight to the Core, then RInterpTo eases the turn every Tick
+	// (Epic Games, Inc., 2026c).
+	float Yaw = GetActorRotation().Yaw;
+	if (IsValid(DreamCore))
+	{
+		const FRotator Facing(0.0f, (CoreFacingLocation - GetActorLocation()).Rotation().Yaw, 0.0f);
+		Yaw = DeltaTime > 0.0f ? FMath::RInterpTo(FRotator(0.0f, Yaw, 0.0f), Facing, DeltaTime, TurnSpeed).Yaw : Facing.Yaw;
+	}
+
+	// Route points only sit on the terrain at each cell, so the enemy is placed over the slope between them.
+	NightlightTerrainUtils::PlaceOnTerrain(this, Yaw, HoverHeight);
 }
 
 void ANightlightEnemy::ApplyDamage(const float DamageAmount)
@@ -150,7 +185,7 @@ void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)
 		FMath::Max(MovementSpeed, 0.0f));
 
 	// VInterpConstantTo stops at the target instead of moving past the waypoint
-	// (Epic Games, Inc., 2026b).
+	// (Epic Games, Inc., 2026c).
 	SetActorLocation(NewLocation);
 
 	const float AcceptanceDistance = FMath::Max(WaypointAcceptanceDistance, 0.0f);
@@ -201,7 +236,7 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 	}
 
 	// Damage starts immediately, then repeats while the same defender remains in range
-	// (Epic Games, Inc., 2026c).
+	// (Epic Games, Inc., 2026d).
 	AttackTargetDefender();
 	if (!IsValid(TargetDefender))
 	{
@@ -220,7 +255,7 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 ANightlightDefender* ANightlightEnemy::FindDefenderTarget()
 {
 	// Every defender type registers itself, so the registry replaces a GetAllActorsOfClass search,
-	// which is slow when there are many actors (Epic Games, Inc., 2026f). Dead defenders are skipped.
+	// which is slow when there are many actors (Epic Games, Inc., 2026g). Dead defenders are skipped.
 	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
 	return Registry ? Registry->FindClosestDefender(GetActorLocation(), DefenderAttackRange) : nullptr;
 }
@@ -241,7 +276,7 @@ void ANightlightEnemy::AttackTargetDefender()
 	}
 
 	// The event fires before the hit so the Blueprint still has a valid defender if this hit
-	// destroys it. Blueprints implement it without any C++ body (Epic Games, Inc., 2026e).
+	// destroys it. Blueprints implement it without any C++ body (Epic Games, Inc., 2026f).
 	OnAttackDefender(TargetDefender);
 	AttackDefender(TargetDefender);
 	if (!IsValid(TargetDefender) || TargetDefender->IsDead())
@@ -330,7 +365,7 @@ void ANightlightEnemy::Die()
 	}
 
 	// Without collision the dying enemy cannot block or catch shots. The life span destroys it once
-	// the delay ends (Epic Games, Inc., 2026a).
+	// the delay ends (Epic Games, Inc., 2026b).
 	SetActorEnableCollision(false);
 	SetLifeSpan(DeathRemovalDelay);
 }
@@ -360,7 +395,7 @@ void ANightlightEnemy::CreateHitFlashMaterials()
 			}
 
 			// A parameter can only be changed while playing on a dynamic instance of the material
-			// (Epic Games, Inc., 2026d; Epic Games, Inc., 2026i).
+			// (Epic Games, Inc., 2026e; Epic Games, Inc., 2026j).
 			if (UMaterialInstanceDynamic* const DynamicMaterial = Mesh->CreateDynamicMaterialInstance(MaterialIndex, Material))
 			{
 				HitFlashMaterials.Add(DynamicMaterial);
@@ -390,7 +425,7 @@ void ANightlightEnemy::StartHitFlash()
 	SetHitFlashAmount(1.0f);
 	HitFlashEndTime = GetWorld()->GetTimeSeconds() + HitFlashDuration;
 
-	// A fast repeating timer fades the flash out. A new hit simply restarts it (Epic Games, Inc., 2026c).
+	// A fast repeating timer fades the flash out. A new hit simply restarts it (Epic Games, Inc., 2026d).
 	GetWorldTimerManager().SetTimer(
 		HitFlashTimerHandle,
 		this,
@@ -418,7 +453,7 @@ void ANightlightEnemy::SetHitFlashAmount(const float Amount)
 	{
 		if (IsValid(DynamicMaterial))
 		{
-			// The dynamic instance takes the new value straight away (Epic Games, Inc., 2026g).
+			// The dynamic instance takes the new value straight away (Epic Games, Inc., 2026h).
 			DynamicMaterial->SetScalarParameterValue(HitFlashParameterName, Amount);
 		}
 	}
@@ -427,39 +462,43 @@ void ANightlightEnemy::SetHitFlashAmount(const float Amount)
 /*
 References
 
-Epic Games, Inc., 2026a. AActor::SetLifeSpan. [online] Available at:
+Epic Games, Inc., 2026a. AActor::GetComponentsBoundingBox. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/GetComponentsBoundingBox>
+[Accessed 2 October 2026].
+
+Epic Games, Inc., 2026b. AActor::SetLifeSpan. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/SetLifeSpan>
 [Accessed 30 September 2026].
 
-Epic Games, Inc., 2026b. FMath. [online] Available at:
+Epic Games, Inc., 2026c. FMath. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath>
 [Accessed 2 October 2026].
 
-Epic Games, Inc., 2026c. Gameplay Timers in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026d. Gameplay Timers in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026d. Instanced Materials in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026e. Instanced Materials in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/instanced-materials-in-unreal-engine>
 [Accessed 30 September 2026].
 
-Epic Games, Inc., 2026e. UFunctions in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026f. UFunctions in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026f. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+Epic Games, Inc., 2026g. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026g. UMaterialInstanceDynamic. [online] Available at:
+Epic Games, Inc., 2026h. UMaterialInstanceDynamic. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UMaterialInstanceDynamic>
 [Accessed 30 September 2026].
 
-Epic Games, Inc., 2026h. Unreal Engine Actor Lifecycle. [online] Available at:
+Epic Games, Inc., 2026i. Unreal Engine Actor Lifecycle. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-actor-lifecycle>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026i. UPrimitiveComponent. [online] Available at:
+Epic Games, Inc., 2026j. UPrimitiveComponent. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UPrimitiveComponent>
 [Accessed 30 September 2026].
 
