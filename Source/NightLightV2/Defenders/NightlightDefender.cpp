@@ -1,12 +1,13 @@
 #include "NightlightDefender.h"
 #include "../Enemies/NightlightEnemy.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../Systems/NightlightTerrainUtils.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 
 ANightlightDefender::ANightlightDefender()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
@@ -14,6 +15,23 @@ ANightlightDefender::ANightlightDefender()
 
 void ANightlightDefender::BeginPlay()
 {
+	// Stand on top of whatever is under the spawn point, such as the placement crate, instead of
+	// inside it. This runs before Super::BeginPlay so Blueprint children start from the raised
+	// position (Epic Games, Inc., 2026i).
+	FHitResult Hit;
+	const FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(NightlightDefenderGround), false, this);
+	if (GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		GetActorLocation() + FVector(0.0, 0.0, 300.0),
+		GetActorLocation() - FVector(0.0, 0.0, 50.0),
+		ECC_Visibility,
+		QueryParams))
+	{
+		SetActorLocation(Hit.ImpactPoint);
+	}
+
+	LastLocation = GetActorLocation();
+	FacingYaw = GetActorRotation().Yaw;
 	Super::BeginPlay();
 
 	// The registry lets enemies find this defender without an actor search.
@@ -41,7 +59,7 @@ void ANightlightDefender::BeginPlay()
 	}
 
 	// A looping timer attacks at a fixed rate without searching for enemies every frame
-	// (Epic Games, Inc., 2026d).
+	// (Epic Games, Inc., 2026e).
 	GetWorldTimerManager().SetTimer(
 		AttackTimerHandle,
 		this,
@@ -53,7 +71,7 @@ void ANightlightDefender::BeginPlay()
 void ANightlightDefender::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// EndPlay runs when the defender is destroyed or the level ends, so both remove it from the
-	// registry (Epic Games, Inc., 2026g).
+	// registry (Epic Games, Inc., 2026h).
 	if (UWorld* const World = GetWorld())
 	{
 		if (UNightlightActorRegistrySubsystem* const Registry = World->GetSubsystem<UNightlightActorRegistrySubsystem>())
@@ -63,6 +81,47 @@ void ANightlightDefender::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 
 	Super::EndPlay(EndPlayReason);
+}
+
+void ANightlightDefender::Tick(const float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	if (bIsDead)
+	{
+		return;
+	}
+
+	// Like the enemies' defender search, the target is refreshed on a short delay instead of every frame.
+	TimeUntilTargetSearch -= DeltaTime;
+	if (TimeUntilTargetSearch <= 0.0f)
+	{
+		TimeUntilTargetSearch = 0.2f;
+		FacingTarget = FindTarget();
+	}
+
+	// An idle defender keeps the yaw its Blueprint gives it, such as the patroller's circling
+	// (Epic Games, Inc., 2026d).
+	if (IsValid(FacingTarget) && !FacingTarget->IsDead())
+	{
+		const FRotator Facing(0.0f, (FacingTarget->GetActorLocation() - GetActorLocation()).Rotation().Yaw, 0.0f);
+		FacingYaw = FMath::RInterpTo(FRotator(0.0f, FacingYaw, 0.0f), Facing, DeltaTime, TurnSpeed).Yaw;
+	}
+	else
+	{
+		FacingYaw = GetActorRotation().Yaw;
+	}
+
+	// Only a defender that moves, like the patroller, follows the terrain. The others stay on their crate.
+	if (FVector2D(GetActorLocation() - LastLocation).IsNearlyZero())
+	{
+		SetActorRotation(FRotator(0.0f, FacingYaw, 0.0f));
+	}
+	else
+	{
+		NightlightTerrainUtils::PlaceOnTerrain(this, FacingYaw, HoverHeight);
+	}
+
+	LastLocation = GetActorLocation();
 }
 
 float ANightlightDefender::TakeDamage(
@@ -110,7 +169,7 @@ float ANightlightDefender::GetDamagePerSecond() const
 ANightlightEnemy* ANightlightDefender::FindTarget_Implementation()
 {
 	// The default target is the closest living enemy inside the attack range. The registry replaces a
-	// GetAllActorsOfClass search, which is slow when there are many actors (Epic Games, Inc., 2026f).
+	// GetAllActorsOfClass search, which is slow when there are many actors (Epic Games, Inc., 2026g).
 	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
 	return Registry ? Registry->FindClosestEnemy(GetActorLocation(), AttackRange) : nullptr;
 }
@@ -169,19 +228,27 @@ Epic Games, Inc., 2026c. Dynamic Delegates in Unreal Engine. [online] Available 
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-delegates-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026d. Gameplay Timers in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026d. FMath. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/FMath>
+[Accessed 2 October 2026].
+
+Epic Games, Inc., 2026e. Gameplay Timers in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-timers-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026e. UFunctions in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026f. UFunctions in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/ufunctions-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026f. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+Epic Games, Inc., 2026g. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026g. Unreal Engine Actor Lifecycle. [online] Available at:
+Epic Games, Inc., 2026h. Unreal Engine Actor Lifecycle. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-actor-lifecycle>
 [Accessed 29 September 2026].
+
+Epic Games, Inc., 2026i. UWorld::LineTraceSingleByChannel. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UWorld/LineTraceSingleByChannel>
+[Accessed 2 October 2026].
 */

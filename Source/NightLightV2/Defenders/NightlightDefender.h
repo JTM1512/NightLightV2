@@ -37,6 +37,7 @@ class NIGHTLIGHTV2_API ANightlightDefender : public AActor
 public:
 	ANightlightDefender();
 
+	virtual void Tick(float DeltaTime) override;
 	virtual float TakeDamage(
 		float DamageAmount,
 		struct FDamageEvent const& DamageEvent,
@@ -57,7 +58,7 @@ public:
 	float GetMaxHealth() const { return MaxHealth; }
 
 	// The wave director reads these to measure how well each spawn route is defended. BlueprintPure, so they
-	// show as getter nodes without an execution pin (Epic Games, Inc., 2026e).
+	// show as getter nodes without an execution pin (Epic Games, Inc., 2026f).
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender|Attack")
 	float GetAttackRange() const { return AttackRange; }
 
@@ -114,8 +115,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Attack", meta = (ClampMin = "0.1"))
 	float AttackInterval = 1.0f;
 
+	// How quickly the defender turns to face its current target. Zero snaps straight to it.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Attack", meta = (ClampMin = "0.0"))
+	float TurnSpeed = 8.0f;
+
+	// A moving defender, like the patroller, flies this far above the terrain. Zero drives on the ground.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender", meta = (ClampMin = "0.0"))
+	float HoverHeight = 0.0f;
+
 	// New defender types only override FindTarget and PerformAttack, in C++ or Blueprint.
-	// BlueprintNativeEvent keeps a C++ default that a Blueprint can replace (Epic Games, Inc., 2026e).
+	// BlueprintNativeEvent keeps a C++ default that a Blueprint can replace (Epic Games, Inc., 2026f).
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Nightlight|Defender|Attack")
 	ANightlightEnemy* FindTarget();
 
@@ -124,6 +133,16 @@ protected:
 
 private:
 	FTimerHandle AttackTimerHandle;
+
+	UPROPERTY()
+	TObjectPtr<ANightlightEnemy> FacingTarget;
+
+	float TimeUntilTargetSearch = 0.0f;
+
+	// Kept separately so a Blueprint that also sets the rotation, like the patroller, cannot pull
+	// the defender away from its target.
+	float FacingYaw = 0.0f;
+	FVector LastLocation = FVector::ZeroVector;
 
 	void HandleAttackTimer();
 	void Die();
