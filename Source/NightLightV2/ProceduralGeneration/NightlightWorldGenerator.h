@@ -63,6 +63,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
 	int32 GetActiveSeed() const { return ActiveSeed; }
 
+	// Exposes the grid size and cell spacing so scenery can line up with the cells.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Generation")
+	const FNightlightGenerationSettings& GetGenerationSettings() const { return GenerationSettings; }
+
 protected:
 	// Starts generation once the Actor enters play, when enabled.
 	virtual void BeginPlay() override;
@@ -109,6 +113,7 @@ protected:
 
 private:
 	friend class FNightlightRouteGenerationTest;
+	friend class FNightlightSceneryScatterTest;
 
 	// Keeps visible geometry and collision synchronized with the logical grid.
 	void RebuildTerrainMesh();
@@ -154,6 +159,6 @@ private:
 	// Converts the completed grid into deterministic render and collision arrays.
 	bool BuildTerrainMeshData(FNightlightTerrainMeshData& OutMeshData) const;
 
-	// Maps logical cell roles to material-readable vertex colours.
+	// Maps each cell role to its own vertex colour channel, which the material reads as a mask.
 	static FLinearColor GetCellVertexColor(ENightlightCellType CellType);
 };

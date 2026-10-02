@@ -104,6 +104,23 @@ bool FNightlightRouteGenerationTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("Every route receives its minimum number of anchors"), bEveryRouteDefended);
 
+	// The material reads one mask per channel, so paths, anchors and Ground must
+	// not leak into each other's channels.
+	FNightlightTerrainMeshData MeshData;
+	bool bMasksMatchCells = Generator->BuildTerrainMeshData(MeshData);
+	for (int32 Index = 0; bMasksMatchCells && Index < Generator->Cells.Num(); ++Index)
+	{
+		const ENightlightCellType Type = Generator->Cells[Index].Type;
+		const FLinearColor& Mask = MeshData.VertexColors[Index];
+		if ((Type == ENightlightCellType::Path && Mask != FLinearColor(1.0f, 0.0f, 0.0f, 0.0f))
+			|| (Type == ENightlightCellType::PlacementAnchor && Mask != FLinearColor(0.0f, 1.0f, 0.0f, 0.0f))
+			|| (Type == ENightlightCellType::Ground && Mask != FLinearColor(0.0f, 0.0f, 0.0f, 0.0f)))
+		{
+			bMasksMatchCells = false;
+		}
+	}
+	TestTrue(TEXT("Path, anchor and Ground cells carry only their own vertex colour mask"), bMasksMatchCells);
+
 	// Keep the ordered routes, generate them again and compare the public contract.
 	const TArray<FNightlightRouteData> FirstRoutes = Generator->GetRoutes();
 	Generator->GenerateLogicalGrid();

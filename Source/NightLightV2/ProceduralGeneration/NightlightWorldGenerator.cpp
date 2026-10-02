@@ -1,5 +1,6 @@
 #include "NightlightWorldGenerator.h"
 #include "Components/SceneComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "ProceduralMeshComponent.h"
 #include "Math/RandomStream.h"
 
@@ -272,7 +273,22 @@ void ANightlightWorldGenerator::RebuildTerrainMesh()
 
 	if (TerrainMaterial)
 	{
-		TerrainMesh->SetMaterial(0, TerrainMaterial);
+		// A dynamic instance gives the material this map's height range, so its
+		// height blend fits every seed (Epic Games, Inc., 2026g).
+		float MinHeight = MAX_flt;
+		float MaxHeight = -MAX_flt;
+		for (const FNightlightCellData& Cell : Cells)
+		{
+			MinHeight = FMath::Min(MinHeight, Cell.Height);
+			MaxHeight = FMath::Max(MaxHeight, Cell.Height);
+		}
+
+		UMaterialInstanceDynamic* TerrainMaterialInstance = TerrainMesh->CreateDynamicMaterialInstance(0, TerrainMaterial);
+		if (TerrainMaterialInstance)
+		{
+			TerrainMaterialInstance->SetScalarParameterValue(TEXT("TerrainMinHeight"), MinHeight + GetActorLocation().Z);
+			TerrainMaterialInstance->SetScalarParameterValue(TEXT("TerrainMaxHeight"), MaxHeight + GetActorLocation().Z);
+		}
 	}
 
 	UE_LOG(
@@ -320,7 +336,9 @@ bool ANightlightWorldGenerator::BuildTerrainMeshData(FNightlightTerrainMeshData&
 	}
 
 	// Shared vertices keep the surface continuous: each neighbouring sample pair
-	// forms two consistently wound triangles (fettis GameDev, 2022).
+	// forms two consistently wound triangles (fettis GameDev, 2022). The order is
+	// chosen so their front faces point up, because a one-sided material culls the
+	// back faces and the terrain would vanish when seen from above.
 	for (int32 Y = 0; Y < Depth - 1; ++Y)
 	{
 		for (int32 X = 0; X < Width - 1; ++X)
@@ -331,7 +349,7 @@ bool ANightlightWorldGenerator::BuildTerrainMeshData(FNightlightTerrainMeshData&
 			const int32 TopRight = GetCellIndex(X + 1, Y + 1, Width);
 
 			OutMeshData.Triangles.Append(
-				{ BottomLeft, BottomRight, TopLeft, BottomRight, TopRight, TopLeft });
+				{ BottomLeft, TopLeft, BottomRight, BottomRight, TopLeft, TopRight });
 		}
 	}
 
@@ -363,19 +381,21 @@ bool ANightlightWorldGenerator::BuildTerrainMeshData(FNightlightTerrainMeshData&
 
 FLinearColor ANightlightWorldGenerator::GetCellVertexColor(const ENightlightCellType CellType)
 {
+	// Each channel is a 0 or 1 mask for one role: R path, G anchor, B Rift, A Core.
+	// The terrain material blends its own surfaces from these, and Ground stays zero.
 	switch (CellType)
 	{
 	case ENightlightCellType::Path:
-		return FLinearColor(0.20f, 0.45f, 0.85f);
-	case ENightlightCellType::Core:
-		return FLinearColor(0.85f, 0.75f, 0.20f);
-	case ENightlightCellType::Rift:
-		return FLinearColor(0.55f, 0.10f, 0.75f);
+		return FLinearColor(1.0f, 0.0f, 0.0f, 0.0f);
 	case ENightlightCellType::PlacementAnchor:
-		return FLinearColor(0.20f, 0.80f, 0.65f);
+		return FLinearColor(0.0f, 1.0f, 0.0f, 0.0f);
+	case ENightlightCellType::Rift:
+		return FLinearColor(0.0f, 0.0f, 1.0f, 0.0f);
+	case ENightlightCellType::Core:
+		return FLinearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	case ENightlightCellType::Ground:
 	default:
-		return FLinearColor(0.08f, 0.22f, 0.10f);
+		return FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	}
 }
 
@@ -910,6 +930,10 @@ Epic Games, Inc., 2026e. Random Streams in Unreal Engine. [online] Available at:
 
 Epic Games, Inc., 2026f. TTransform. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TTransform>
+[Accessed 2 October 2026].
+
+Epic Games, Inc., 2026g. UMaterialInstanceDynamic. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UMaterialInstanceDynamic>
 [Accessed 2 October 2026].
 
 fettis GameDev, 2022. Terrain generation in C++ for Beginners - Unreal Engine
