@@ -212,7 +212,8 @@ bool ANightlightEnemy::UpdateDefenderCombat(const float DeltaTime)
 	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
 	if (IsValid(TargetDefender))
 	{
-		if (FVector::DistSquared(GetActorLocation(), TargetDefender->GetActorLocation()) <= AttackRangeSquared)
+		// Flat distance, like the registry search, so a defender on its crate stays in reach.
+		if (FVector::DistSquared2D(GetActorLocation(), TargetDefender->GetActorLocation()) <= AttackRangeSquared)
 		{
 			return true;
 		}
@@ -269,7 +270,7 @@ void ANightlightEnemy::AttackTargetDefender()
 	}
 
 	const float AttackRangeSquared = FMath::Square(FMath::Max(DefenderAttackRange, 0.0f));
-	if (FVector::DistSquared(GetActorLocation(), TargetDefender->GetActorLocation()) > AttackRangeSquared)
+	if (FVector::DistSquared2D(GetActorLocation(), TargetDefender->GetActorLocation()) > AttackRangeSquared)
 	{
 		ClearDefenderTarget();
 		return;

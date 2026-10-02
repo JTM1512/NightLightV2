@@ -94,11 +94,12 @@ void ANightlightEnemyBrute::LandSlam()
 	const float SlamRadiusSquared = FMath::Square(FMath::Max(SlamRadius, 0.0f));
 	const float SlamDamage = FMath::Max(DefenderAttackDamage, 0.0f);
 
+	// The slam reaches out flat, so defenders on their crates are still inside it.
 	int32 HitCount = 0;
 	for (ANightlightDefender* const Defender : Defenders)
 	{
 		if (IsValid(Defender) && !Defender->IsDead()
-			&& FVector::DistSquared(SlamCentre, Defender->GetActorLocation()) <= SlamRadiusSquared)
+			&& FVector::DistSquared2D(SlamCentre, Defender->GetActorLocation()) <= SlamRadiusSquared)
 		{
 			Defender->ApplyDamage(SlamDamage);
 			++HitCount;

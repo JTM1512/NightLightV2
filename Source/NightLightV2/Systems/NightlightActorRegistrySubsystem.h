@@ -63,7 +63,7 @@ public:
 	FNightlightRegistryDefenderSignature OnDefenderRemoved;
 
 private:
-	// Weak pointers so the registry never keeps a destroyed actor alive (Epic Games, Inc., 2026c).
+	// Weak pointers so the registry never keeps a destroyed actor alive (Epic Games, Inc., 2026d).
 	TArray<TWeakObjectPtr<ANightlightEnemy>> Enemies;
 	TArray<TWeakObjectPtr<ANightlightDefender>> Defenders;
 };

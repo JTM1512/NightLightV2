@@ -65,14 +65,16 @@ namespace
 		for (const TWeakObjectPtr<ActorType>& Entry : Entries)
 		{
 			// A destroyed actor makes the weak pointer return null instead of a dangling pointer
-			// (Epic Games, Inc., 2026c).
+			// (Epic Games, Inc., 2026d).
 			ActorType* const Actor = Entry.Get();
 			if (!IsValid(Actor) || Actor->IsDead())
 			{
 				continue;
 			}
 
-			const float DistanceSquared = FVector::DistSquared(Location, Actor->GetActorLocation());
+			// Distance is measured flat, so a defender on its crate or a floating unit is not put out of
+			// reach by its height (Epic Games, Inc., 2026b).
+			const float DistanceSquared = FVector::DistSquared2D(Location, Actor->GetActorLocation());
 			if (DistanceSquared <= ClosestDistanceSquared)
 			{
 				ClosestActor = Actor;
@@ -87,7 +89,7 @@ namespace
 void UNightlightActorRegistrySubsystem::Deinitialize()
 {
 	// A world subsystem ends with its world, so nothing from this level can be carried into the next
-	// (Epic Games, Inc., 2026b; Epic Games, Inc., 2026e).
+	// (Epic Games, Inc., 2026c; Epic Games, Inc., 2026f).
 	Enemies.Empty();
 	Defenders.Empty();
 	Super::Deinitialize();
@@ -96,7 +98,7 @@ void UNightlightActorRegistrySubsystem::Deinitialize()
 void UNightlightActorRegistrySubsystem::RegisterEnemy(ANightlightEnemy* const Enemy)
 {
 	// GetAllActorsOfClass walks every actor of the class on each call, which becomes slow with large
-	// waves (Epic Games, Inc., 2026d). Keeping a list only costs one add and one remove per enemy.
+	// waves (Epic Games, Inc., 2026e). Keeping a list only costs one add and one remove per enemy.
 	if (AddEntry(Enemies, Enemy))
 	{
 		// Listeners such as the later wave director react without the enemy knowing about them
@@ -171,19 +173,23 @@ Epic Games, Inc., 2026a. Dynamic Delegates in Unreal Engine. [online] Available 
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-delegates-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026b. Programming Subsystems in Unreal Engine. [online] Available at:
+Epic Games, Inc., 2026b. FVector::DistSquared2D. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/Math/FVector/DistSquared2D>
+[Accessed 2 October 2026].
+
+Epic Games, Inc., 2026c. Programming Subsystems in Unreal Engine. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/programming-subsystems-in-unreal-engine>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026c. TWeakObjectPtr. [online] Available at:
+Epic Games, Inc., 2026d. TWeakObjectPtr. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Core/TWeakObjectPtr>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026d. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
+Epic Games, Inc., 2026e. UGameplayStatics::GetAllActorsOfClass. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UGameplayStatics/GetAllActorsOfClass>
 [Accessed 29 September 2026].
 
-Epic Games, Inc., 2026e. UWorldSubsystem. [online] Available at:
+Epic Games, Inc., 2026f. UWorldSubsystem. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UWorldSubsystem>
 [Accessed 29 September 2026].
 
