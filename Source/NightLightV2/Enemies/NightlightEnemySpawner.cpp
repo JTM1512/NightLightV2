@@ -95,6 +95,7 @@ ANightlightEnemy* ANightlightEnemySpawner::SpawnEnemyOnRoute(
 
 	Enemy->AssignDreamCore(DreamCore);
 	Enemy->AssignRoute(RoutePoints);
+	OnEnemySpawned.Broadcast(Enemy);
 	return Enemy;
 }
 

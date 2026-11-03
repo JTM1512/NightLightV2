@@ -67,6 +67,11 @@ void ANightlightDreamCore::BeginPlay()
 		true);
 }
 
+float ANightlightDreamCore::GetHealthPercent() const
+{
+	return MaxHealth > 0.0f ? FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f) : 0.0f;
+}
+
 void ANightlightDreamCore::ApplyCoreDamage(const float DamageAmount)
 {
 	if (bCoreDestroyed || DamageAmount <= 0.0f)

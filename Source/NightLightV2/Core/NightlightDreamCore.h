@@ -42,6 +42,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Dream Core")
 	float GetMaxHealth() const { return MaxHealth; }
 
+	// Current health over max health, from 0 to 1. The crayon HUD uses it as the kid's sanity.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Dream Core")
+	float GetHealthPercent() const;
+
 	// Ranged enemies read this so they always stop close enough for the Core to hit them.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Dream Core|Attack")
 	float GetAttackRange() const { return AttackRange; }

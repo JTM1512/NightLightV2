@@ -9,6 +9,10 @@ class ANightlightDreamCore;
 class ANightlightWorldGenerator;
 class USceneComponent;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FNightlightEnemySpawnedSignature,
+	ANightlightEnemy*, Enemy);
+
 // Holds the routes the world generator created and spawns one enemy on a route whenever the wave director asks.
 // It never spawns by itself, so the director decides every enemy and when it arrives.
 UCLASS(Blueprintable)
@@ -40,6 +44,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy Spawning")
 	ANightlightWorldGenerator* GetWorldGenerator() const { return WorldGenerator; }
+
+	// Fires after each enemy is given its route, so the HUD can warn when a Brute or Shade arrives.
+	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy Spawning")
+	FNightlightEnemySpawnedSignature OnEnemySpawned;
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")

@@ -51,6 +51,7 @@ bool FNightlightDreamCoreUpgradeTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("A seventh defender is blocked at level 0"), Core->CanPlaceDefender());
 
 	Core->ApplyCoreDamage(20.0f);
+	TestEqual(TEXT("Health percent follows the damage"), Core->GetHealthPercent(), 0.8f);
 	TestTrue(TEXT("The first upgrade is applied"), Core->UpgradeCore());
 	TestEqual(TEXT("Level 1 after the first upgrade"), Core->GetUpgradeLevel(), 1);
 	TestEqual(TEXT("Max health rises by 50"), Core->GetMaxHealth(), 150.0f);
