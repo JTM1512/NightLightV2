@@ -1,5 +1,6 @@
 #include "NightlightWaveMath.h"
 #include "../Enemies/NightlightEnemy.h"
+#include "../Enemies/NightlightEliteGenerator.h"
 
 namespace
 {
@@ -16,12 +17,84 @@ namespace
 
 	// Fisher-Yates shuffle: swap each slot, from the back, with a random slot at or before it. The stream
 	// keeps the order the same for the same seed (Epic Games, Inc., 2026c).
-	void ShuffleWithStream(TArray<int32>& Entries, FRandomStream& RandomStream)
+	template <typename ElementType>
+	void ShuffleWithStream(TArray<ElementType>& Entries, FRandomStream& RandomStream)
 	{
 		for (int32 Index = Entries.Num() - 1; Index > 0; --Index)
 		{
 			Entries.Swap(Index, RandomStream.RandRange(0, Index));
 		}
+	}
+
+	// The shared planning loop. With elites off it uses exactly the random numbers it always did, so plans made
+	// without elites stay the same for the same seed.
+	TArray<FNightlightPlannedEnemy> PlanEnemies(
+		const UNightlightWaveSettings* const Settings,
+		const int32 WaveNumber,
+		const int32 Budget,
+		const FNightlightEnemyMixWeights& TypeWeightMultipliers,
+		FRandomStream& RandomStream,
+		const bool bAllowElites)
+	{
+		TArray<FNightlightPlannedEnemy> PlannedEnemies;
+		TArray<int32> CandidateIndices;
+		TArray<float> CandidateWeights;
+		int32 RemainingBudget = Budget;
+		const float EliteChance = bAllowElites ? UNightlightEliteGenerator::CalculateEliteChance(Settings, WaveNumber) : 0.0f;
+		const int32 EliteCostMultiplier = FMath::Max(Settings->EliteCostMultiplier, 1);
+
+		while (RemainingBudget > 0)
+		{
+			CandidateIndices.Reset();
+			CandidateWeights.Reset();
+
+			// Only unlocked types with a class that the remaining budget can still pay for.
+			for (int32 EntryIndex = 0; EntryIndex < Settings->Enemies.Num(); ++EntryIndex)
+			{
+				const FNightlightWaveEnemyEntry& Entry = Settings->Enemies[EntryIndex];
+				if (!Entry.EnemyClass
+					|| WaveNumber < Entry.UnlockWave
+					|| Entry.ThreatCost < 1
+					|| Entry.ThreatCost > RemainingBudget)
+				{
+					continue;
+				}
+
+				// The wave template's multipliers shift the mix, but only among the types already unlocked.
+				const float Weight = Entry.BaseWeight * TypeWeightMultipliers.GetWeightForRole(Entry.Role);
+				if (Weight <= 0.0f)
+				{
+					continue;
+				}
+
+				CandidateIndices.Add(EntryIndex);
+				CandidateWeights.Add(Weight);
+			}
+
+			// The same weighted pick the spawn routes use, so there is only one implementation of it.
+			const int32 PickedSlot = UNightlightWaveMath::PickWeightedIndex(CandidateWeights, RandomStream);
+			if (PickedSlot == INDEX_NONE)
+			{
+				break;
+			}
+
+			FNightlightPlannedEnemy PlannedEnemy;
+			PlannedEnemy.EntryIndex = CandidateIndices[PickedSlot];
+			PlannedEnemy.PlanIndex = PlannedEnemies.Num();
+
+			// The elite roll only happens when the raised cost still fits, so an elite always replaces normal
+			// enemies and the budget is never overspent.
+			const int32 ThreatCost = Settings->Enemies[PlannedEnemy.EntryIndex].ThreatCost;
+			if (EliteChance > 0.0f && ThreatCost * EliteCostMultiplier <= RemainingBudget)
+			{
+				PlannedEnemy.bIsElite = RandomStream.FRand() < EliteChance;
+			}
+
+			RemainingBudget -= PlannedEnemy.bIsElite ? ThreatCost * EliteCostMultiplier : ThreatCost;
+			PlannedEnemies.Add(PlannedEnemy);
+		}
+
+		return PlannedEnemies;
 	}
 }
 
@@ -123,51 +196,29 @@ TArray<int32> UNightlightWaveMath::PlanWaveEnemies(
 	Settings = GetSettingsOrDefault(Settings);
 
 	TArray<int32> PlannedEntries;
-	TArray<int32> CandidateIndices;
-	TArray<float> CandidateWeights;
-	int32 RemainingBudget = Budget;
-
-	while (RemainingBudget > 0)
+	for (const FNightlightPlannedEnemy& PlannedEnemy : PlanEnemies(Settings, WaveNumber, Budget, TypeWeightMultipliers, RandomStream, false))
 	{
-		CandidateIndices.Reset();
-		CandidateWeights.Reset();
-
-		// Only unlocked types with a class that the remaining budget can still pay for.
-		for (int32 EntryIndex = 0; EntryIndex < Settings->Enemies.Num(); ++EntryIndex)
-		{
-			const FNightlightWaveEnemyEntry& Entry = Settings->Enemies[EntryIndex];
-			if (!Entry.EnemyClass
-				|| WaveNumber < Entry.UnlockWave
-				|| Entry.ThreatCost < 1
-				|| Entry.ThreatCost > RemainingBudget)
-			{
-				continue;
-			}
-
-			// The wave template's multipliers shift the mix, but only among the types already unlocked.
-			const float Weight = Entry.BaseWeight * TypeWeightMultipliers.GetWeightForRole(Entry.Role);
-			if (Weight <= 0.0f)
-			{
-				continue;
-			}
-
-			CandidateIndices.Add(EntryIndex);
-			CandidateWeights.Add(Weight);
-		}
-
-		// The same weighted pick the spawn routes use, so there is only one implementation of it.
-		const int32 PickedSlot = PickWeightedIndex(CandidateWeights, RandomStream);
-		if (PickedSlot == INDEX_NONE)
-		{
-			break;
-		}
-
-		const int32 PickedEntryIndex = CandidateIndices[PickedSlot];
-		PlannedEntries.Add(PickedEntryIndex);
-		RemainingBudget -= Settings->Enemies[PickedEntryIndex].ThreatCost;
+		PlannedEntries.Add(PlannedEnemy.EntryIndex);
 	}
-
 	return PlannedEntries;
+}
+
+TArray<FNightlightPlannedEnemy> UNightlightWaveMath::PlanWaveEnemiesWithElites(
+	const UNightlightWaveSettings* Settings,
+	const int32 WaveNumber,
+	const int32 Budget,
+	const FNightlightEnemyMixWeights& TypeWeightMultipliers,
+	FRandomStream& RandomStream)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	return PlanEnemies(Settings, WaveNumber, Budget, TypeWeightMultipliers, RandomStream, true);
+}
+
+int32 UNightlightWaveMath::GetPlannedEnemyCost(const UNightlightWaveSettings* Settings, const FNightlightPlannedEnemy& PlannedEnemy)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	const int32 ThreatCost = GetThreatCost(Settings, PlannedEnemy.EntryIndex);
+	return PlannedEnemy.bIsElite ? ThreatCost * FMath::Max(Settings->EliteCostMultiplier, 1) : ThreatCost;
 }
 
 FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
@@ -175,20 +226,37 @@ FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
 	const TArray<int32>& PlannedEntryIndices,
 	FRandomStream& RandomStream)
 {
+	// Normal enemies only, split the same way as planned enemies, so there is one implementation of the split.
+	TArray<FNightlightPlannedEnemy> PlannedEnemies;
+	for (int32 PlanIndex = 0; PlanIndex < PlannedEntryIndices.Num(); ++PlanIndex)
+	{
+		FNightlightPlannedEnemy& PlannedEnemy = PlannedEnemies.AddDefaulted_GetRef();
+		PlannedEnemy.EntryIndex = PlannedEntryIndices[PlanIndex];
+		PlannedEnemy.PlanIndex = PlanIndex;
+	}
+
+	return GetPhaseEntryIndices(SplitPlannedEnemiesIntoPhases(Settings, PlannedEnemies, RandomStream));
+}
+
+FNightlightPlannedPhaseLists UNightlightWaveMath::SplitPlannedEnemiesIntoPhases(
+	const UNightlightWaveSettings* Settings,
+	const TArray<FNightlightPlannedEnemy>& PlannedEnemies,
+	FRandomStream& RandomStream)
+{
 	Settings = GetSettingsOrDefault(Settings);
-	FNightlightWavePhaseLists PhaseLists;
+	FNightlightPlannedPhaseLists PhaseLists;
 
 	// JTM1512's idea: each wave builds up, peaks, then gives the player a moment of relief.
-	const int32 EnemyCount = PlannedEntryIndices.Num();
+	const int32 EnemyCount = PlannedEnemies.Num();
 	const int32 BuildUpCount = FMath::Clamp(FMath::RoundToInt(EnemyCount * Settings->BuildUpShare), 0, EnemyCount);
 	const int32 PeakCount = FMath::Clamp(FMath::RoundToInt(EnemyCount * Settings->PeakShare), 0, EnemyCount - BuildUpCount);
 
-	// Most expensive first. A stable sort keeps equal costs in their planned order, so the split only
-	// depends on the plan and the seed (Epic Games, Inc., 2026e).
-	TArray<int32> SortedEntries = PlannedEntryIndices;
-	SortedEntries.StableSort([Settings](const int32 First, const int32 Second)
+	// Most expensive first, with an elite counted at its raised cost. A stable sort keeps equal costs in their
+	// planned order, so the split only depends on the plan and the seed (Epic Games, Inc., 2026e).
+	TArray<FNightlightPlannedEnemy> SortedEnemies = PlannedEnemies;
+	SortedEnemies.StableSort([Settings](const FNightlightPlannedEnemy& First, const FNightlightPlannedEnemy& Second)
 	{
-		return GetThreatCost(Settings, First) > GetThreatCost(Settings, Second);
+		return GetPlannedEnemyCost(Settings, First) > GetPlannedEnemyCost(Settings, Second);
 	});
 
 	// The peak takes the front of the list, build-up the cheapest at the back and relief the middle.
@@ -197,15 +265,15 @@ FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
 	{
 		if (SortedIndex < PeakCount)
 		{
-			PhaseLists.Peak.Add(SortedEntries[SortedIndex]);
+			PhaseLists.Peak.Add(SortedEnemies[SortedIndex]);
 		}
 		else if (SortedIndex < BuildUpStart)
 		{
-			PhaseLists.Relief.Add(SortedEntries[SortedIndex]);
+			PhaseLists.Relief.Add(SortedEnemies[SortedIndex]);
 		}
 		else
 		{
-			PhaseLists.BuildUp.Add(SortedEntries[SortedIndex]);
+			PhaseLists.BuildUp.Add(SortedEnemies[SortedIndex]);
 		}
 	}
 
@@ -213,6 +281,24 @@ FNightlightWavePhaseLists UNightlightWaveMath::SplitIntoPhases(
 	ShuffleWithStream(PhaseLists.BuildUp, RandomStream);
 	ShuffleWithStream(PhaseLists.Peak, RandomStream);
 	ShuffleWithStream(PhaseLists.Relief, RandomStream);
+	return PhaseLists;
+}
+
+FNightlightWavePhaseLists UNightlightWaveMath::GetPhaseEntryIndices(const FNightlightPlannedPhaseLists& PlannedPhaseLists)
+{
+	FNightlightWavePhaseLists PhaseLists;
+	const TPair<const TArray<FNightlightPlannedEnemy>*, TArray<int32>*> Phases[] = {
+		{ &PlannedPhaseLists.BuildUp, &PhaseLists.BuildUp },
+		{ &PlannedPhaseLists.Peak, &PhaseLists.Peak },
+		{ &PlannedPhaseLists.Relief, &PhaseLists.Relief } };
+
+	for (const TPair<const TArray<FNightlightPlannedEnemy>*, TArray<int32>*>& Phase : Phases)
+	{
+		for (const FNightlightPlannedEnemy& PlannedEnemy : *Phase.Key)
+		{
+			Phase.Value->Add(PlannedEnemy.EntryIndex);
+		}
+	}
 	return PhaseLists;
 }
 
@@ -366,6 +452,13 @@ float UNightlightWaveMath::CalculateChallengeLevel(
 void UNightlightWaveMath::MovePhaseEnemiesToFront(TArray<int32>& FromPhase, TArray<int32>& ToPhase)
 {
 	// Inserting the whole list at index 0 keeps both orders, so the moved enemies spawn next (Epic Games, Inc., 2026a).
+	ToPhase.Insert(FromPhase, 0);
+	FromPhase.Reset();
+}
+
+void UNightlightWaveMath::MovePlannedEnemiesToFront(TArray<FNightlightPlannedEnemy>& FromPhase, TArray<FNightlightPlannedEnemy>& ToPhase)
+{
+	// The same insert as MovePhaseEnemiesToFront, so each moved elite keeps its flag and plan index.
 	ToPhase.Insert(FromPhase, 0);
 	FromPhase.Reset();
 }

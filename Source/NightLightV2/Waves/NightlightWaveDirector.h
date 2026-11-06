@@ -53,6 +53,14 @@ struct NIGHTLIGHTV2_API FNightlightWaveInfo
 	// E_n in the budget formula: below 1 on the eased opening waves, 1 after them.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	float EarlyWaveBudgetScale = 1.0f;
+
+	// The chance each planned enemy had of being promoted to an elite. 0 before the first elite wave.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float EliteChance = 0.0f;
+
+	// Planned elites, already counted in EnemyCount.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 EliteCount = 0;
 };
 
 // How the last wave went. Fields are only ever added here, so Blueprint bindings never break.
@@ -69,6 +77,10 @@ struct NIGHTLIGHTV2_API FNightlightWaveSummary
 
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	int32 EnemiesSpawned = 0;
+
+	// Elites spawned, already counted in EnemiesSpawned.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 ElitesSpawned = 0;
 
 	// Enemies that died before they reached the Core.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
@@ -284,11 +296,11 @@ protected:
 	bool bShowWaveDebug = false;
 
 private:
-	// Settings->Enemies indices still to spawn in each phase. Kept as members so the challenge level can move
+	// Enemies still to spawn in each phase, with their elite flags. Kept as members so the challenge level can move
 	// enemies between phases while the wave runs.
-	TArray<int32> BuildUpEnemies;
-	TArray<int32> PeakEnemies;
-	TArray<int32> ReliefEnemies;
+	TArray<FNightlightPlannedEnemy> BuildUpEnemies;
+	TArray<FNightlightPlannedEnemy> PeakEnemies;
+	TArray<FNightlightPlannedEnemy> ReliefEnemies;
 
 	// This wave's enemies still in play. Weak, so a destroyed enemy never stays alive through this set.
 	TSet<TWeakObjectPtr<ANightlightEnemy>> WaveEnemies;
@@ -297,6 +309,9 @@ private:
 	TObjectPtr<ANightlightDreamCore> BoundDreamCore;
 
 	FRandomStream WaveRandomStream;
+
+	// The generator's seed, kept so every elite's own seed can be built from it.
+	int32 MapSeed = 0;
 	FTimerHandle BuildPhaseTimerHandle;
 	FTimerHandle SpawnTimerHandle;
 	FTimerHandle ChallengeTimerHandle;
@@ -305,6 +320,7 @@ private:
 	int32 CurrentWaveBudget = 0;
 	int32 EnemiesSpawnedThisWave = 0;
 	int32 EnemiesStoppedThisWave = 0;
+	int32 ElitesSpawnedThisWave = 0;
 	float WaveStartTime = 0.0f;
 	float CoreHealthAtWaveStart = 0.0f;
 
@@ -361,7 +377,7 @@ private:
 	void SetWavePhase(ENightlightWavePhase NewPhase);
 	void BroadcastEnemiesRemaining();
 	bool HasEnemiesToSpawn() const;
-	TArray<int32>* GetPhaseEnemies(ENightlightWavePhase Phase);
+	TArray<FNightlightPlannedEnemy>* GetPhaseEnemies(ENightlightWavePhase Phase);
 	bool IsWaveRunning() const;
 	void UpdateChallengeLevel();
 	void HoldSpawns();

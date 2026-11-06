@@ -1354,7 +1354,11 @@ void UNightlightCrayonHUDWidget::HandleEnemySpawned(ANightlightEnemy* const Enem
 {
 	const bool bBrute = Enemy && Enemy->IsA<ANightlightEnemyBrute>();
 	const bool bShade = Enemy && Enemy->IsA<ANightlightEnemyShade>();
-	if ((!bBrute && !bShade) || Warning->IsShowing())
+	const bool bElite = Enemy && Enemy->IsElite();
+
+	// An elite's warning replaces a Brute or Shade warning already showing, because the player needs its name to
+	// know which counter it brings.
+	if ((!bBrute && !bShade && !bElite) || (Warning->IsShowing() && !bElite))
 	{
 		return;
 	}
@@ -1364,6 +1368,15 @@ void UNightlightCrayonHUDWidget::HandleEnemySpawned(ANightlightEnemy* const Enem
 		? PlayerController->PlayerCameraManager->GetCameraRotation() : FRotator::ZeroRotator;
 	const FVector From = Enemy->GetActorLocation() - (Core.IsValid() ? Core->GetActorLocation() : FVector::ZeroVector);
 	const FText Direction = DescribeDirection(From, CameraRotation);
+	if (bElite)
+	{
+		Warning->ShowMessage(
+			FText::Format(NSLOCTEXT("NightlightCrayon", "EliteWarning", "A {0} IS COMING FROM THE {1}"),
+				Enemy->GetEliteDisplayName().ToUpper(), Direction),
+			2.5f, 40);
+		return;
+	}
+
 	Warning->ShowMessage(
 		bBrute
 			? FText::Format(NSLOCTEXT("NightlightCrayon", "BruteWarning", "SOMETHING BIG IS COMING FROM THE {0}"), Direction)

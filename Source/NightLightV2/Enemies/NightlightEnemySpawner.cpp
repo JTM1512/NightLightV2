@@ -62,6 +62,22 @@ ANightlightEnemy* ANightlightEnemySpawner::SpawnEnemyOnRoute(
 	const TSubclassOf<ANightlightEnemy> SpawnClass,
 	const int32 RouteIndex)
 {
+	return SpawnOnRoute(SpawnClass, RouteIndex, nullptr);
+}
+
+ANightlightEnemy* ANightlightEnemySpawner::SpawnEliteOnRoute(
+	const TSubclassOf<ANightlightEnemy> SpawnClass,
+	const int32 RouteIndex,
+	const FNightlightEliteProfile& EliteProfile)
+{
+	return SpawnOnRoute(SpawnClass, RouteIndex, &EliteProfile);
+}
+
+ANightlightEnemy* ANightlightEnemySpawner::SpawnOnRoute(
+	const TSubclassOf<ANightlightEnemy> SpawnClass,
+	const int32 RouteIndex,
+	const FNightlightEliteProfile* const EliteProfile)
+{
 	if (!SpawnClass || !CachedRouteWorldLocations.IsValidIndex(RouteIndex))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Nightlight could not spawn an enemy because it has no class or route %d is not prepared."), RouteIndex);
@@ -91,6 +107,12 @@ ANightlightEnemy* ANightlightEnemySpawner::SpawnEnemyOnRoute(
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Nightlight could not spawn the selected enemy class at route %d."), RouteIndex);
 		return nullptr;
+	}
+
+	// The elite profile goes on first, so its health, speed and look are in place before anything hears about it.
+	if (EliteProfile)
+	{
+		Enemy->ApplyEliteProfile(*EliteProfile);
 	}
 
 	Enemy->AssignDreamCore(DreamCore);

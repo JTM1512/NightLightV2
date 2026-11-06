@@ -101,7 +101,8 @@ void ANightlightEnemyBrute::LandSlam()
 		if (IsValid(Defender) && !Defender->IsDead()
 			&& FVector::DistSquared2D(SlamCentre, Defender->GetActorLocation()) <= SlamRadiusSquared)
 		{
-			Defender->ApplyDamage(SlamDamage);
+			// Through the base class, so a Siphon Brute heals from every defender the slam hits.
+			DamageDefender(Defender, SlamDamage);
 			++HitCount;
 		}
 	}

@@ -3,10 +3,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "TimerManager.h"
+#include "NightlightEliteTypes.h"
 #include "NightlightEnemy.generated.h"
 
 class USceneComponent;
 class UMaterialInstanceDynamic;
+class UPointLightComponent;
 class UNiagaraSystem;
 class ANightlightDreamCore;
 class ANightlightDefender;
@@ -71,6 +73,32 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy")
 	FNightlightEnemyDamagedSignature OnDamageTaken;
 
+	// Turns this enemy into an elite: scales its health, speed and tokens, sets its look and fires On Became Elite.
+	// The spawner calls it before it announces the enemy, so the HUD already sees the elite. Only the first call
+	// counts, and a profile that is not elite changes nothing.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy|Elite")
+	void ApplyEliteProfile(const FNightlightEliteProfile& Profile);
+
+	// The Remnant manager reads this to always drop a Remnant for an elite.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy|Elite")
+	bool IsElite() const { return EliteProfile.bIsElite; }
+
+	// Such as "Swift Siphon Shade". Empty for a normal enemy.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy|Elite")
+	FText GetEliteDisplayName() const { return EliteProfile.DisplayName; }
+
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy|Elite")
+	FNightlightEliteProfile GetEliteProfile() const { return EliteProfile; }
+
+	// Called with the health a defender actually lost to this enemy, by its own hits and by its projectiles. A
+	// Siphon elite heals a share of it.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy|Elite")
+	void NotifyDefenderDamageDealt(float DamageDealt);
+
+	// Restores health without going above MaxHealth. A dead enemy cannot be healed.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy")
+	void Heal(float HealAmount);
+
 	// The enemy triggers the reward, while its Blueprint passes the tokens to the existing Game State pool.
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Nightlight|Enemy|Rewards")
 	void AwardDeathTokens(int32 TokenAmount);
@@ -132,7 +160,8 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Enemy")
 	bool bIsDead = false;
 
-	// Every mesh material with a scalar parameter of this name flashes when the enemy is hit.
+	// Every mesh material with a scalar parameter of this name flashes when the enemy is hit. The hit flash and the
+	// elite look share one set of dynamic materials.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback")
 	FName HitFlashParameterName = TEXT("HitFlash");
 
@@ -152,9 +181,43 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
 	float HitSparkCooldown = 0.1f;
 
+	// An elite sets this vector parameter to its tint on every mesh material that has it.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite")
+	FName EliteTintParameterName = TEXT("EliteTint");
+
+	// An elite sets this scalar parameter to its glow brightness, flaring when a Siphon elite heals.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite")
+	FName EliteGlowParameterName = TEXT("EliteGlow");
+
+	// A Frenzied elite sets this scalar parameter to its pulses per second, which rise as it is hurt.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite")
+	FName ElitePulseSpeedParameterName = TEXT("ElitePulseSpeed");
+
+	// Adds a point light in the elite's tint, so the elite shows up even when its materials have no elite parameters.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite")
+	bool bAddEliteLight = true;
+
+	// Light brightness in candelas for each point of elite glow.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite", meta = (ClampMin = "0.0"))
+	float EliteLightIntensityPerGlow = 30.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite", meta = (ClampMin = "0.0"))
+	float EliteLightRadius = 400.0f;
+
+	// A Siphon heal brightens the glow by this much, fading back over EliteHealFlareDuration.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite", meta = (ClampMin = "1.0"))
+	float EliteHealFlareMultiplier = 2.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Elite", meta = (ClampMin = "0.0"))
+	float EliteHealFlareDuration = 0.4f;
+
 	// A dead enemy stays in the level this long, without collision, so its death effect can play. Zero removes it at once.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
 	float DeathRemovalDelay = 0.2f;
+
+	// Lets the enemy Blueprint add its own elite extras, such as a crown mesh or a sound, once the profile is applied.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy|Elite", meta = (DisplayName = "On Became Elite"))
+	void OnBecameElite(const FNightlightEliteProfile& Profile);
 
 	// Lets the enemy Blueprint react just before it is removed at the Core.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Nightlight|Enemy", meta = (DisplayName = "On Core Reached"))
@@ -191,6 +254,10 @@ protected:
 	// Stops the defender attack timer, for example when a type switches to attacking the Core.
 	void ClearDefenderTarget();
 
+	// Damages one defender and reports the health it really lost, so a Siphon elite can heal from it. Every melee
+	// hit and slam goes through here.
+	void DamageDefender(ANightlightDefender* Defender, float Damage);
+
 private:
 	UPROPERTY()
 	TObjectPtr<ANightlightDreamCore> DreamCore;
@@ -204,18 +271,41 @@ private:
 	// The middle of the Core's meshes, because the tower mesh's pivot sits on one corner.
 	FVector CoreFacingLocation = FVector::ZeroVector;
 
-	// Created on the first hit, so enemies that are never hit keep sharing their original materials.
+	// Created on the first hit or when the enemy becomes elite, so plain enemies that are never hit keep sharing
+	// their original materials. The hit flash and the elite look both write to these.
 	UPROPERTY(Transient)
-	TArray<TObjectPtr<UMaterialInstanceDynamic>> HitFlashMaterials;
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> FeedbackMaterials;
 
-	bool bHasCreatedHitFlashMaterials = false;
+	bool bHasCreatedFeedbackMaterials = false;
 	FTimerHandle HitFlashTimerHandle;
 	float HitFlashEndTime = 0.0f;
 
-	void CreateHitFlashMaterials();
+	void CreateFeedbackMaterials();
 	void StartHitFlash();
 	void UpdateHitFlash();
 	void SetHitFlashAmount(float Amount);
+
+	UPROPERTY(VisibleInstanceOnly, Category = "Nightlight|Enemy|Elite")
+	FNightlightEliteProfile EliteProfile;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPointLightComponent> EliteLight;
+
+	// DefenderAttackInterval before a frenzy, so the frenzy multiplier is applied to the original value once.
+	float BaseDefenderAttackInterval = 1.0f;
+	bool bIsFrenzied = false;
+
+	FTimerHandle EliteVisualTimerHandle;
+	float ElitePulsePhase = 0.0f;
+	float EliteHealFlareEndTime = 0.0f;
+
+	void ScaleEliteMeshes();
+	void AddEliteLight();
+	void UpdateFrenzy();
+
+	// Pulses and flares the glow. Runs on a short timer only for elites that pulse or heal.
+	void UpdateEliteVisuals();
+	float GetCurrentPulseSpeed() const;
 
 	float NextHitSparkTime = 0.0f;
 	void SpawnHitSparks(float AppliedDamage);

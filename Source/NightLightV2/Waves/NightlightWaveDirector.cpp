@@ -2,6 +2,7 @@
 #include "NightlightWaveSettings.h"
 #include "../Core/NightlightDreamCore.h"
 #include "../Defenders/NightlightDefender.h"
+#include "../Enemies/NightlightEliteGenerator.h"
 #include "../Enemies/NightlightEnemy.h"
 #include "../Enemies/NightlightEnemySpawner.h"
 #include "../ProceduralGeneration/NightlightWorldGenerator.h"
@@ -18,20 +19,24 @@ namespace
 	// Fixed on-screen keys, one per readout slot, so each line replaces its last copy instead of stacking.
 	constexpr int32 WaveDebugKey = 7300;
 
-	// "2 Walker, 3 Shade" for one phase list, counted per role.
-	FString DescribeEnemies(const UNightlightWaveSettings* const Settings, const TArray<int32>& Entries)
+	// "2 Walker (1 elite), 3 Shade" for one phase list, counted per role.
+	FString DescribeEnemies(const UNightlightWaveSettings* const Settings, const TArray<FNightlightPlannedEnemy>& Entries)
 	{
 		FString Text;
 		for (const ENightlightWaveEnemyRole Role : { ENightlightWaveEnemyRole::Walker, ENightlightWaveEnemyRole::Shade, ENightlightWaveEnemyRole::Brute })
 		{
-			const int32 Count = Entries.FilterByPredicate([Settings, Role](const int32 Entry)
+			const TArray<FNightlightPlannedEnemy> OfRole = Entries.FilterByPredicate([Settings, Role](const FNightlightPlannedEnemy& Entry)
 			{
-				return Settings->Enemies.IsValidIndex(Entry) && Settings->Enemies[Entry].Role == Role;
-			}).Num();
-			if (Count > 0)
+				return Settings->Enemies.IsValidIndex(Entry.EntryIndex) && Settings->Enemies[Entry.EntryIndex].Role == Role;
+			});
+			if (OfRole.IsEmpty())
 			{
-				Text += FString::Printf(TEXT("%s%d %s"), Text.IsEmpty() ? TEXT("") : TEXT(", "), Count, *UEnum::GetDisplayValueAsText(Role).ToString());
+				continue;
 			}
+
+			const int32 Elites = OfRole.FilterByPredicate([](const FNightlightPlannedEnemy& Entry) { return Entry.bIsElite; }).Num();
+			const FString EliteText = Elites > 0 ? FString::Printf(TEXT(" (%d elite)"), Elites) : FString();
+			Text += FString::Printf(TEXT("%s%d %s%s"), Text.IsEmpty() ? TEXT("") : TEXT(", "), OfRole.Num(), *UEnum::GetDisplayValueAsText(Role).ToString(), *EliteText);
 		}
 		return Text.IsEmpty() ? TEXT("none") : Text;
 	}
@@ -116,7 +121,8 @@ void ANightlightWaveDirector::StartWaves()
 	// The map's seed also seeds the waves, so the same map always plays the same waves while balancing
 	// (Epic Games, Inc., 2026c).
 	const ANightlightWorldGenerator* const Generator = EnemySpawner->GetWorldGenerator();
-	WaveRandomStream.Initialize(Generator ? Generator->GetActiveSeed() : 0);
+	MapSeed = Generator ? Generator->GetActiveSeed() : 0;
+	WaveRandomStream.Initialize(MapSeed);
 
 	BoundDreamCore = EnemySpawner->GetDreamCore();
 	if (IsValid(BoundDreamCore))
@@ -217,10 +223,11 @@ void ANightlightWaveDirector::StartWave()
 	// CurrentWaveInfo still holds the last wave here, so its template is the one not to repeat.
 	const FNightlightWaveTemplate Template = UNightlightWaveMath::ChooseTemplate(
 		Settings, CurrentWaveNumber, WavePlayStyle, CurrentWaveInfo.TemplateName, WaveRandomStream);
-	const TArray<int32> PlannedEntries = UNightlightWaveMath::PlanWaveEnemies(
+	// From EliteStartWave some picks are promoted to elites, which cost more, so they replace normal enemies.
+	const TArray<FNightlightPlannedEnemy> PlannedEntries = UNightlightWaveMath::PlanWaveEnemiesWithElites(
 		Settings, CurrentWaveNumber, CurrentWaveBudget, Template.Weights, WaveRandomStream);
 
-	const FNightlightWavePhaseLists PhaseLists = UNightlightWaveMath::SplitIntoPhases(Settings, PlannedEntries, WaveRandomStream);
+	const FNightlightPlannedPhaseLists PhaseLists = UNightlightWaveMath::SplitPlannedEnemiesIntoPhases(Settings, PlannedEntries, WaveRandomStream);
 	BuildUpEnemies = PhaseLists.BuildUp;
 	PeakEnemies = PhaseLists.Peak;
 	ReliefEnemies = PhaseLists.Relief;
@@ -231,9 +238,10 @@ void ANightlightWaveDirector::StartWave()
 	WaveEnemies.Reset();
 	EnemiesSpawnedThisWave = 0;
 	EnemiesStoppedThisWave = 0;
+	ElitesSpawnedThisWave = 0;
 	WaveStartTime = GetWorld()->GetTimeSeconds();
 	CoreHealthAtWaveStart = IsValid(BoundDreamCore) ? BoundDreamCore->GetCurrentHealth() : 0.0f;
-	PlannedSpawnSeconds = UNightlightWaveMath::CalculatePlannedSpawnSeconds(Settings, CurrentWaveNumber, PhaseLists);
+	PlannedSpawnSeconds = UNightlightWaveMath::CalculatePlannedSpawnSeconds(Settings, CurrentWaveNumber, UNightlightWaveMath::GetPhaseEntryIndices(PhaseLists));
 	HeldSpawnSeconds = 0.0f;
 
 	// The challenge level only looks at this wave, so nothing from the last wave carries over.
@@ -257,6 +265,8 @@ void ANightlightWaveDirector::StartWave()
 	CurrentWaveInfo.DefenderUpgradeTiers = DefenderUpgradeTiers;
 	CurrentWaveInfo.UpgradeFactor = UpgradeFactor;
 	CurrentWaveInfo.EarlyWaveBudgetScale = EarlyWaveBudgetScale;
+	CurrentWaveInfo.EliteChance = UNightlightEliteGenerator::CalculateEliteChance(Settings, CurrentWaveNumber);
+	CurrentWaveInfo.EliteCount = PlannedEntries.FilterByPredicate([](const FNightlightPlannedEnemy& Entry) { return Entry.bIsElite; }).Num();
 
 	if (PlannedEntries.IsEmpty())
 	{
@@ -270,9 +280,11 @@ void ANightlightWaveDirector::StartWave()
 		RouteText += FString::Printf(TEXT("%s%d: %.2f (%.0f dps)"), RouteIndex > 0 ? TEXT(", ") : TEXT(""), RouteIndex, RouteBaseWeights[RouteIndex], RouteDefence[RouteIndex]);
 	}
 	const FString EasedText = EarlyWaveBudgetScale < 1.0f ? FString::Printf(TEXT(" | eased to %.0f%%"), EarlyWaveBudgetScale * 100.0f) : FString();
-	ShowWaveLine(1, FString::Printf(TEXT("Wave %d%s | %s | budget %d | A %.2f | U %.2f (Core %d, tiers %d)%s"), CurrentWaveNumber,
+	const FString EliteText = CurrentWaveInfo.EliteChance > 0.0f
+		? FString::Printf(TEXT(" | elites %d (%.0f%% chance)"), CurrentWaveInfo.EliteCount, CurrentWaveInfo.EliteChance * 100.0f) : FString();
+	ShowWaveLine(1, FString::Printf(TEXT("Wave %d%s | %s | budget %d | A %.2f | U %.2f (Core %d, tiers %d)%s%s"), CurrentWaveNumber,
 		CurrentWaveInfo.bIsPeakWave ? TEXT(" (peak wave)") : TEXT(""), *Template.Name.ToString(), CurrentWaveBudget, AdaptiveFactor,
-		UpgradeFactor, CoreUpgradeLevel, DefenderUpgradeTiers, *EasedText));
+		UpgradeFactor, CoreUpgradeLevel, DefenderUpgradeTiers, *EasedText, *EliteText));
 	ShowWaveLine(2, FString::Printf(TEXT("Mix: build-up %s | peak %s | relief %s"),
 		*DescribeEnemies(Settings, BuildUpEnemies), *DescribeEnemies(Settings, PeakEnemies), *DescribeEnemies(Settings, ReliefEnemies)));
 	ShowWaveLine(3, FString::Printf(TEXT("Play style: %.0f%% short range, %.0f%% long range, %.0f apart%s%s%s"),
@@ -307,7 +319,7 @@ void ANightlightWaveDirector::StartPhase(ENightlightWavePhase Phase)
 		Phase = Phase == ENightlightWavePhase::BuildUp ? ENightlightWavePhase::Peak : ENightlightWavePhase::Relief;
 	}
 
-	const TArray<int32>* const PhaseEnemies = GetPhaseEnemies(Phase);
+	const TArray<FNightlightPlannedEnemy>* const PhaseEnemies = GetPhaseEnemies(Phase);
 	SetWavePhase(Phase);
 	if (!PhaseEnemies || PhaseEnemies->IsEmpty())
 	{
@@ -331,7 +343,7 @@ void ANightlightWaveDirector::StartPhase(ENightlightWavePhase Phase)
 
 void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 {
-	TArray<int32>* const PhaseEnemies = GetPhaseEnemies(WavePhase);
+	TArray<FNightlightPlannedEnemy>* const PhaseEnemies = GetPhaseEnemies(WavePhase);
 	if (!PhaseEnemies)
 	{
 		GetWorldTimerManager().ClearTimer(SpawnTimerHandle);
@@ -345,7 +357,8 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 		return;
 	}
 
-	const int32 EntryIndex = (*PhaseEnemies)[0];
+	const FNightlightPlannedEnemy PlannedEnemy = (*PhaseEnemies)[0];
+	const int32 EntryIndex = PlannedEnemy.EntryIndex;
 	PhaseEnemies->RemoveAt(0);
 
 	const UNightlightWaveSettings* const Settings = GetSettings();
@@ -356,10 +369,32 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 		: INDEX_NONE;
 	if (RouteIndex != INDEX_NONE)
 	{
-		if (ANightlightEnemy* const Enemy = EnemySpawner->SpawnEnemyOnRoute(Settings->Enemies[EntryIndex].EnemyClass, RouteIndex))
+		const FNightlightWaveEnemyEntry& Entry = Settings->Enemies[EntryIndex];
+		ANightlightEnemy* Enemy = nullptr;
+		if (PlannedEnemy.bIsElite)
+		{
+			// The elite is rolled from its own seed: the map seed, the wave and its place in the plan. The same map
+			// therefore always gives the same elites, while the play style read this wave picks the counters.
+			const int32 EliteSeed = UNightlightEliteGenerator::MakeEliteSeed(MapSeed, CurrentWaveNumber, PlannedEnemy.PlanIndex);
+			const FNightlightEliteProfile Profile = UNightlightEliteGenerator::GenerateEliteProfile(
+				Settings, CurrentWaveNumber, EliteSeed, WavePlayStyle, Entry.Role);
+			Enemy = EnemySpawner->SpawnEliteOnRoute(Entry.EnemyClass, RouteIndex, Profile);
+			if (Enemy)
+			{
+				++ElitesSpawnedThisWave;
+				UE_LOG(LogNightlightWaves, Log, TEXT("Wave %d elite: %s on route %d (health x%.2f, speed x%.2f, seed %d)"), CurrentWaveNumber,
+					*Profile.DisplayName.ToString(), RouteIndex, Profile.HealthMultiplier, Profile.SpeedMultiplier, EliteSeed);
+			}
+		}
+		else
+		{
+			Enemy = EnemySpawner->SpawnEnemyOnRoute(Entry.EnemyClass, RouteIndex);
+		}
+
+		if (Enemy)
 		{
 			// A weak pointer, so an enemy destroyed without its EndPlay reaching us is still dropped later
-			// (Epic Games, Inc., 2026h).
+			// (Epic Games, Inc., 2026h). Elites count like any other enemy for the remaining count and the score.
 			WaveEnemies.Add(Enemy);
 			++EnemiesSpawnedThisWave;
 		}
@@ -459,6 +494,7 @@ void ANightlightWaveDirector::TryFinishWave()
 	LastWaveSummary.WaveNumber = CurrentWaveNumber;
 	LastWaveSummary.bWasPeakWave = CurrentWaveInfo.bIsPeakWave;
 	LastWaveSummary.EnemiesSpawned = EnemiesSpawnedThisWave;
+	LastWaveSummary.ElitesSpawned = ElitesSpawnedThisWave;
 	LastWaveSummary.EnemiesStopped = EnemiesStoppedThisWave;
 	LastWaveSummary.ClearSeconds = GetWorld()->GetTimeSeconds() - WaveStartTime;
 	LastWaveSummary.ThreatBudget = CurrentWaveBudget;
@@ -565,7 +601,7 @@ bool ANightlightWaveDirector::HasEnemiesToSpawn() const
 	return !BuildUpEnemies.IsEmpty() || !PeakEnemies.IsEmpty() || !ReliefEnemies.IsEmpty();
 }
 
-TArray<int32>* ANightlightWaveDirector::GetPhaseEnemies(const ENightlightWavePhase Phase)
+TArray<FNightlightPlannedEnemy>* ANightlightWaveDirector::GetPhaseEnemies(const ENightlightWavePhase Phase)
 {
 	switch (Phase)
 	{
@@ -669,9 +705,9 @@ void ANightlightWaveDirector::ReactToChallengeLevel()
 			// in a phase that will not run again.
 			if (WavePhase == ENightlightWavePhase::BuildUp)
 			{
-				UNightlightWaveMath::MovePhaseEnemiesToFront(PeakEnemies, ReliefEnemies);
+				UNightlightWaveMath::MovePlannedEnemiesToFront(PeakEnemies, ReliefEnemies);
 			}
-			UNightlightWaveMath::MovePhaseEnemiesToFront(*GetPhaseEnemies(WavePhase), ReliefEnemies);
+			UNightlightWaveMath::MovePlannedEnemiesToFront(*GetPhaseEnemies(WavePhase), ReliefEnemies);
 
 			bReliefCameEarly = true;
 			BroadcastChallengeReaction(ENightlightChallengeReaction::ReliefEarly);
@@ -693,7 +729,7 @@ void ANightlightWaveDirector::ReactToChallengeLevel()
 		&& ChallengeLevel < Settings->LowChallengeThreshold
 		&& Now - WaveStartTime >= Settings->ChallengeWindowSeconds)
 	{
-		UNightlightWaveMath::MovePhaseEnemiesToFront(BuildUpEnemies, PeakEnemies);
+		UNightlightWaveMath::MovePlannedEnemiesToFront(BuildUpEnemies, PeakEnemies);
 		bPeakCameEarly = true;
 		BroadcastChallengeReaction(ENightlightChallengeReaction::PeakEarly);
 		StartPhase(ENightlightWavePhase::Peak);

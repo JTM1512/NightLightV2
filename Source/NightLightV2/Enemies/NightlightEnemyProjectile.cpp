@@ -1,6 +1,7 @@
 #include "NightlightEnemyProjectile.h"
 #include "../Core/NightlightDreamCore.h"
 #include "../Defenders/NightlightDefender.h"
+#include "NightlightEnemy.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
@@ -90,7 +91,15 @@ bool ANightlightEnemyProjectile::TryHit(AActor* const HitActor)
 			return false;
 		}
 
+		// The shooter is the projectile's owner, so the health the defender really lost is reported back to it and a
+		// Siphon Shade heals even though it never touches the defender (Epic Games, Inc., 2026e).
+		const float HealthBefore = Defender->GetCurrentHealth();
 		Defender->ApplyDamage(Damage);
+		const float HealthAfter = IsValid(Defender) ? Defender->GetCurrentHealth() : 0.0f;
+		if (ANightlightEnemy* const Shooter = Cast<ANightlightEnemy>(GetOwner()); IsValid(Shooter))
+		{
+			Shooter->NotifyDefenderDamageDealt(HealthBefore - HealthAfter);
+		}
 	}
 	else if (ANightlightDreamCore* const DreamCore = Cast<ANightlightDreamCore>(HitActor))
 	{
@@ -131,4 +140,8 @@ Epic Games, Inc., 2026c. Implementing Projectiles in Unreal Engine. [online] Ava
 Epic Games, Inc., 2026d. UProjectileMovementComponent. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UProjectileMovementComponent>
 [Accessed 30 September 2026].
+
+Epic Games, Inc., 2026e. AActor::GetOwner. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/GetOwner>
+[Accessed 6 November 2026].
 */

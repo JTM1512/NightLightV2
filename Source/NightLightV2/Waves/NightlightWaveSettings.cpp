@@ -33,6 +33,18 @@ namespace
 		Template.Counters = Counters;
 		return Template;
 	}
+
+	FNightlightEliteMutationRule MakeMutationRule(
+		const ENightlightEliteMutation Mutation,
+		const ENightlightWaveTemplateCounter Counters,
+		const FLinearColor& Colour)
+	{
+		FNightlightEliteMutationRule Rule;
+		Rule.Mutation = Mutation;
+		Rule.Counters = Counters;
+		Rule.Colour = Colour;
+		return Rule;
+	}
 }
 
 UNightlightWaveSettings::UNightlightWaveSettings()
@@ -51,6 +63,37 @@ UNightlightWaveSettings::UNightlightWaveSettings()
 
 	// Waves 1 to 4 are eased in at 60% to 90% of their budget, so the player has room to learn the map.
 	EarlyWaveBudgetScale = { 0.6f, 0.7f, 0.8f, 0.9f };
+
+	// The four elite mutations. Each one that changes a stat has a range the elite's strength roll picks from,
+	// and Swift and Armoured exclude each other because a fast tank would cancel both of their counters
+	// (Hunicke and Chapman, 2004).
+	FNightlightEliteMutationRule Swift = MakeMutationRule(ENightlightEliteMutation::Swift, ENightlightWaveTemplateCounter::LongRange, FLinearColor(0.15f, 0.45f, 1.0f));
+	Swift.MinSpeedMultiplier = 1.3f;
+	Swift.MaxSpeedMultiplier = 1.6f;
+	Swift.MinHealthMultiplier = 0.85f;
+	Swift.MaxHealthMultiplier = 0.85f;
+	Swift.StretchAtFullStrength = FVector(0.85f, 0.85f, 1.25f);
+	Swift.ExcludedMutations = { ENightlightEliteMutation::Armoured };
+	EliteMutations.Add(Swift);
+
+	FNightlightEliteMutationRule Armoured = MakeMutationRule(ENightlightEliteMutation::Armoured, ENightlightWaveTemplateCounter::ShortRange, FLinearColor(0.55f, 0.58f, 0.62f));
+	Armoured.MinHealthMultiplier = 1.5f;
+	Armoured.MaxHealthMultiplier = 2.0f;
+	Armoured.MinSpeedMultiplier = 0.8f;
+	Armoured.MaxSpeedMultiplier = 0.8f;
+	Armoured.ExcludedMutations = { ENightlightEliteMutation::Swift };
+	EliteMutations.Add(Armoured);
+
+	FNightlightEliteMutationRule Frenzied = MakeMutationRule(ENightlightEliteMutation::Frenzied, ENightlightWaveTemplateCounter::None, FLinearColor(1.0f, 0.1f, 0.05f));
+	Frenzied.MinHurtAttackIntervalMultiplier = 0.6f;
+	Frenzied.MaxHurtAttackIntervalMultiplier = 0.6f;
+	Frenzied.PulseSpeed = 1.5f;
+	EliteMutations.Add(Frenzied);
+
+	FNightlightEliteMutationRule Siphon = MakeMutationRule(ENightlightEliteMutation::Siphon, ENightlightWaveTemplateCounter::Packed, FLinearColor(0.6f, 0.15f, 1.0f));
+	Siphon.MinHealFraction = 0.15f;
+	Siphon.MaxHealFraction = 0.3f;
+	EliteMutations.Add(Siphon);
 }
 
 /*

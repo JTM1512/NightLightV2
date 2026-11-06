@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "NightlightEliteTypes.h"
 #include "NightlightEnemySpawner.generated.h"
 
 class ANightlightEnemy;
@@ -32,6 +33,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy Spawning")
 	ANightlightEnemy* SpawnEnemyOnRoute(TSubclassOf<ANightlightEnemy> SpawnClass, int32 RouteIndex);
 
+	// SpawnEnemyOnRoute for an elite. The profile is applied before On Enemy Spawned fires, so the HUD's warning
+	// already sees the elite and its name.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Enemy Spawning")
+	ANightlightEnemy* SpawnEliteOnRoute(TSubclassOf<ANightlightEnemy> SpawnClass, int32 RouteIndex, const FNightlightEliteProfile& EliteProfile);
+
 	// Only routes with at least two points are cached, so every index below this count can be spawned on.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy Spawning")
 	int32 GetRouteCount() const { return CachedRouteWorldLocations.Num(); }
@@ -45,7 +51,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Enemy Spawning")
 	ANightlightWorldGenerator* GetWorldGenerator() const { return WorldGenerator; }
 
-	// Fires after each enemy is given its route, so the HUD can warn when a Brute or Shade arrives.
+	// Fires after each enemy is given its route and any elite profile, so the HUD can warn when a Brute, Shade or
+	// elite arrives.
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Enemy Spawning")
 	FNightlightEnemySpawnedSignature OnEnemySpawned;
 
@@ -64,4 +71,7 @@ protected:
 private:
 	// Store the world routes once, then give each enemy its own copy.
 	TArray<TArray<FVector>> CachedRouteWorldLocations;
+
+	// The one spawn path for normal and elite enemies. A null profile spawns a normal enemy.
+	ANightlightEnemy* SpawnOnRoute(TSubclassOf<ANightlightEnemy> SpawnClass, int32 RouteIndex, const FNightlightEliteProfile* EliteProfile);
 };

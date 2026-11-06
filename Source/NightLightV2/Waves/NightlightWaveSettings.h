@@ -3,23 +3,11 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Templates/SubclassOf.h"
+#include "NightlightWaveTypes.h"
+#include "../Enemies/NightlightEliteTypes.h"
 #include "NightlightWaveSettings.generated.h"
 
 class ANightlightEnemy;
-
-// What an enemy type does in a wave, so the play-style counters can boost one role without knowing the class.
-UENUM(BlueprintType)
-enum class ENightlightWaveEnemyRole : uint8
-{
-	// Medium-speed melee enemy.
-	Walker,
-
-	// Fragile ranged enemy.
-	Shade,
-
-	// Slow, heavy area attacker.
-	Brute
-};
 
 // One enemy type the wave director can buy with its threat budget (Epic Games, Inc., 2026b).
 USTRUCT(BlueprintType)
@@ -63,22 +51,6 @@ struct NIGHTLIGHTV2_API FNightlightEnemyMixWeights
 	float Brute = 1.0f;
 
 	float GetWeightForRole(ENightlightWaveEnemyRole Role) const;
-};
-
-// The play style a wave template is picked to counter.
-UENUM(BlueprintType)
-enum class ENightlightWaveTemplateCounter : uint8
-{
-	None,
-
-	// Mostly short-range defenders, such as Pulse.
-	ShortRange,
-
-	// Mostly long-range defenders, such as Shooters.
-	LongRange,
-
-	// Defenders packed close together.
-	Packed
 };
 
 // JTM1512's wave templates, each picked more often when it counters how the player has built (Epic Games, Inc., 2026b).
@@ -328,4 +300,59 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Routes", meta = (ClampMin = "1.0"))
 	float ShadeLongestRouteMultiplier = 1.5f;
+
+	// The first wave that can promote an enemy to an elite.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "1"))
+	int32 EliteStartWave = 4;
+
+	// The elite chance on EliteStartWave. Each pick's chance is min(EliteBaseChance + EliteChancePerWave * (n -
+	// EliteStartWave), EliteMaxChance), so elites grow more common slowly and never take over a wave (Chen, 2007).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float EliteBaseChance = 0.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float EliteChancePerWave = 0.02f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float EliteMaxChance = 0.3f;
+
+	// An elite costs its type's ThreatCost times this, so elites replace normal enemies instead of adding to a wave.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "1"))
+	int32 EliteCostMultiplier = 2;
+
+	// Elites roll one mutation before this wave and two from it.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "1"))
+	int32 TwoMutationWave = 10;
+
+	// The mutation pool: Swift, Armoured, Frenzied and Siphon by default.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites")
+	TArray<FNightlightEliteMutationRule> EliteMutations;
+
+	// A mutation that counters the player's play style has its weight multiplied by this (Hunicke and Chapman, 2004).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "1.0"))
+	float EliteCounterWeightMultiplier = 2.0f;
+
+	// The combined health and speed multipliers are clamped to these, so two strong rolls cannot make an elite
+	// that the player has no answer to.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "1.0"))
+	float EliteMaxHealthMultiplier = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "1.0"))
+	float EliteMaxSpeedMultiplier = 1.6f;
+
+	// A Frenzied elite attacks faster once its health falls below this share of its max health.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float FrenzyHealthFraction = 0.5f;
+
+	// An elite's TokensOnDeath is multiplied by 1 + this for each mutation it has.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0"))
+	float EliteTokenBonusPerMutation = 0.5f;
+
+	// The mesh grows by this share for each 1 of health multiplier above 1, so a x2 health elite is 35% larger.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0"))
+	float EliteScalePerExtraHealth = 0.35f;
+
+	// Glow brightness for each mutation, so a two-mutation elite glows twice as brightly.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Elites", meta = (ClampMin = "0.0"))
+	float EliteGlowPerMutation = 1.0f;
 };

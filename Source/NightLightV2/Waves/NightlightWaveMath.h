@@ -72,6 +72,46 @@ struct NIGHTLIGHTV2_API FNightlightWavePhaseLists
 	TArray<int32> Relief;
 };
 
+// One enemy in a planned wave. Elites cost EliteCostMultiplier times their type's ThreatCost.
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightPlannedEnemy
+{
+	GENERATED_BODY()
+
+	// The Settings->Enemies row this enemy is.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	int32 EntryIndex = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	bool bIsElite = false;
+
+	// Where the enemy came in the plan before it was split and shuffled. An elite's seed uses this, so the same
+	// map and wave always give the same elites, whatever order the phases spawn them in.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	int32 PlanIndex = INDEX_NONE;
+
+	bool operator==(const FNightlightPlannedEnemy& Other) const
+	{
+		return EntryIndex == Other.EntryIndex && bIsElite == Other.bIsElite && PlanIndex == Other.PlanIndex;
+	}
+};
+
+// The planned enemies split into the three phases of a wave, keeping each enemy's elite flag.
+USTRUCT(BlueprintType)
+struct NIGHTLIGHTV2_API FNightlightPlannedPhaseLists
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	TArray<FNightlightPlannedEnemy> BuildUp;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	TArray<FNightlightPlannedEnemy> Peak;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Waves")
+	TArray<FNightlightPlannedEnemy> Relief;
+};
+
 // The four between-wave measures, each already turned into 0 (played badly) to 1 (played well). A negative
 // value means the measure was not available, so the score leaves it out.
 USTRUCT(BlueprintType)
@@ -136,6 +176,33 @@ public:
 		const FNightlightEnemyMixWeights& TypeWeightMultipliers,
 		UPARAM(ref) FRandomStream& RandomStream);
 
+	// PlanWaveEnemies with elites: from EliteStartWave, each pick that can afford it has the elite chance of being
+	// an elite, which costs EliteCostMultiplier times as much. Elites replace normal enemies, so the whole budget is
+	// still spent and never overspent. Before EliteStartWave no extra random numbers are used, so those waves plan
+	// exactly the same enemies as PlanWaveEnemies for the same seed.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static TArray<FNightlightPlannedEnemy> PlanWaveEnemiesWithElites(
+		const UNightlightWaveSettings* Settings,
+		int32 WaveNumber,
+		int32 Budget,
+		const FNightlightEnemyMixWeights& TypeWeightMultipliers,
+		UPARAM(ref) FRandomStream& RandomStream);
+
+	// The threat points one planned enemy costs: its type's ThreatCost, times EliteCostMultiplier for an elite.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static int32 GetPlannedEnemyCost(const UNightlightWaveSettings* Settings, const FNightlightPlannedEnemy& PlannedEnemy);
+
+	// SplitIntoPhases for planned enemies. Elites sort by their raised cost, so they lean towards the peak.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static FNightlightPlannedPhaseLists SplitPlannedEnemiesIntoPhases(
+		const UNightlightWaveSettings* Settings,
+		const TArray<FNightlightPlannedEnemy>& PlannedEnemies,
+		UPARAM(ref) FRandomStream& RandomStream);
+
+	// The Settings->Enemies rows of planned phase lists, for the functions that only need the types.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static FNightlightWavePhaseLists GetPhaseEntryIndices(const FNightlightPlannedPhaseLists& PlannedPhaseLists);
+
 	// Splits a planned wave into build-up, peak and relief by the shares in Settings. The most expensive
 	// enemies go to the peak, the cheapest of the rest to build-up and the remainder to relief. Each list is
 	// then shuffled with the stream, so the same seed always gives the same split.
@@ -190,6 +257,10 @@ public:
 	// Enemies are only moved, never removed, so the wave still spawns its whole budget.
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
 	static void MovePhaseEnemiesToFront(UPARAM(ref) TArray<int32>& FromPhase, UPARAM(ref) TArray<int32>& ToPhase);
+
+	// MovePhaseEnemiesToFront for planned enemies, so elites keep their flag when the challenge level moves them.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")
+	static void MovePlannedEnemiesToFront(UPARAM(ref) TArray<FNightlightPlannedEnemy>& FromPhase, UPARAM(ref) TArray<FNightlightPlannedEnemy>& ToPhase);
 
 	// A weighted random index. Zero and negative weights are never picked; -1 when none is positive.
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Waves")

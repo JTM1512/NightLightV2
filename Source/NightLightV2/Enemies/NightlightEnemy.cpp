@@ -1,4 +1,5 @@
 #include "NightlightEnemy.h"
+#include "NightlightEliteGenerator.h"
 #include "../Core/NightlightDreamCore.h"
 #include "../Defenders/NightlightDefender.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
@@ -6,6 +7,7 @@
 #include "../Systems/NightlightVfx.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/MeshComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -51,6 +53,7 @@ void ANightlightEnemy::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UWorld* const World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(HitFlashTimerHandle);
+		World->GetTimerManager().ClearTimer(EliteVisualTimerHandle);
 		if (UNightlightActorRegistrySubsystem* const Registry = World->GetSubsystem<UNightlightActorRegistrySubsystem>())
 		{
 			Registry->UnregisterEnemy(this);
@@ -165,10 +168,204 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 
 	if (CurrentHealth > 0.0f)
 	{
+		UpdateFrenzy();
 		return;
 	}
 
 	Die();
+}
+
+void ANightlightEnemy::Heal(const float HealAmount)
+{
+	if (bIsDead || HealAmount <= 0.0f || CurrentHealth >= MaxHealth)
+	{
+		return;
+	}
+
+	CurrentHealth = FMath::Min(CurrentHealth + HealAmount, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+}
+
+void ANightlightEnemy::ApplyEliteProfile(const FNightlightEliteProfile& Profile)
+{
+	if (!Profile.bIsElite || EliteProfile.bIsElite || bIsDead)
+	{
+		return;
+	}
+
+	EliteProfile = Profile;
+
+	// The stats scale the values the Blueprint child set, so an elite Brute is still a Brute, just tougher.
+	const float HealthFraction = MaxHealth > 0.0f ? CurrentHealth / MaxHealth : 1.0f;
+	MaxHealth = FMath::Max(MaxHealth * Profile.HealthMultiplier, 1.0f);
+	CurrentHealth = MaxHealth * HealthFraction;
+	MovementSpeed *= Profile.SpeedMultiplier;
+	TokensOnDeath = UNightlightEliteGenerator::CalculateEliteTokens(TokensOnDeath, Profile);
+	BaseDefenderAttackInterval = DefenderAttackInterval;
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+
+	// The look follows the stats, so the player can read what an elite does before it reaches the defence
+	// (Swink, 2007).
+	ScaleEliteMeshes();
+	if (!bHasCreatedFeedbackMaterials)
+	{
+		CreateFeedbackMaterials();
+	}
+	for (UMaterialInstanceDynamic* const DynamicMaterial : FeedbackMaterials)
+	{
+		if (IsValid(DynamicMaterial))
+		{
+			// A material without one of these parameters simply ignores it (Epic Games, Inc., 2026h).
+			DynamicMaterial->SetVectorParameterValue(EliteTintParameterName, Profile.Tint);
+		}
+	}
+	AddEliteLight();
+	UpdateEliteVisuals();
+
+	// Only elites that pulse or flare need the visual timer. A short repeating timer is cheaper than ticking every
+	// frame and keeps running while a Shade stands still to shoot the Core (Epic Games, Inc., 2026d).
+	if (Profile.PulseSpeed > 0.0f || Profile.HealFraction > 0.0f)
+	{
+		GetWorldTimerManager().SetTimer(
+			EliteVisualTimerHandle,
+			this,
+			&ANightlightEnemy::UpdateEliteVisuals,
+			0.05f,
+			true);
+	}
+
+	OnBecameElite(EliteProfile);
+}
+
+void ANightlightEnemy::NotifyDefenderDamageDealt(const float DamageDealt)
+{
+	if (!EliteProfile.bIsElite || EliteProfile.HealFraction <= 0.0f || DamageDealt <= 0.0f || bIsDead)
+	{
+		return;
+	}
+
+	const float PreviousHealth = CurrentHealth;
+	Heal(DamageDealt * EliteProfile.HealFraction);
+	if (CurrentHealth > PreviousHealth)
+	{
+		// The glow flares on each heal, so the player can see the elite feeding on their defenders.
+		EliteHealFlareEndTime = GetWorld()->GetTimeSeconds() + EliteHealFlareDuration;
+		UpdateEliteVisuals();
+	}
+}
+
+void ANightlightEnemy::UpdateFrenzy()
+{
+	if (!EliteProfile.bIsElite || bIsFrenzied || FMath::IsNearlyEqual(EliteProfile.HurtAttackIntervalMultiplier, 1.0f)
+		|| CurrentHealth >= MaxHealth * EliteProfile.FrenzyHealthFraction)
+	{
+		return;
+	}
+
+	bIsFrenzied = true;
+	DefenderAttackInterval = FMath::Max(BaseDefenderAttackInterval * EliteProfile.HurtAttackIntervalMultiplier, 0.1f);
+
+	// Setting a running timer again replaces it, so the faster interval starts from this hit instead of waiting out
+	// the slower one (Epic Games, Inc., 2026d).
+	if (GetWorldTimerManager().IsTimerActive(DefenderAttackTimerHandle))
+	{
+		GetWorldTimerManager().SetTimer(
+			DefenderAttackTimerHandle,
+			this,
+			&ANightlightEnemy::AttackTargetDefender,
+			DefenderAttackInterval,
+			true);
+	}
+}
+
+void ANightlightEnemy::ScaleEliteMeshes()
+{
+	TArray<UMeshComponent*> Meshes;
+	GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* const Mesh : Meshes)
+	{
+		// The health bar keeps its size, and a mesh attached to another mesh already grows with its parent.
+		if (!IsValid(Mesh) || Mesh->IsA<UWidgetComponent>() || Cast<UMeshComponent>(Mesh->GetAttachParent()))
+		{
+			continue;
+		}
+
+		Mesh->SetRelativeScale3D(Mesh->GetRelativeScale3D() * EliteProfile.MeshScale);
+	}
+}
+
+void ANightlightEnemy::AddEliteLight()
+{
+	if (!bAddEliteLight || EliteLight)
+	{
+		return;
+	}
+
+	// A light made at runtime has to be registered before it renders. It does not cast shadows, so a wave of
+	// elites stays cheap (Epic Games, Inc., 2026k).
+	EliteLight = NewObject<UPointLightComponent>(this, TEXT("EliteLight"));
+	EliteLight->SetupAttachment(GetRootComponent());
+	EliteLight->SetIntensityUnits(ELightUnits::Candelas);
+	EliteLight->SetLightColor(EliteProfile.Tint);
+	EliteLight->SetAttenuationRadius(EliteLightRadius);
+	EliteLight->SetCastShadows(false);
+
+	// The middle of the body, or a little above the root when the meshes have no collision to measure.
+	const FBox Bounds = GetComponentsBoundingBox(true);
+	EliteLight->SetRelativeLocation(Bounds.IsValid
+		? GetActorTransform().InverseTransformPosition(Bounds.GetCenter())
+		: FVector(0.0f, 0.0f, 60.0f));
+	EliteLight->RegisterComponent();
+	AddInstanceComponent(EliteLight);
+}
+
+float ANightlightEnemy::GetCurrentPulseSpeed() const
+{
+	// Pulses up to three times as fast near death, so a hurt Frenzied elite looks more dangerous.
+	const float HealthFraction = MaxHealth > 0.0f ? FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f) : 1.0f;
+	return EliteProfile.PulseSpeed * (1.0f + 2.0f * (1.0f - HealthFraction));
+}
+
+void ANightlightEnemy::UpdateEliteVisuals()
+{
+	const UWorld* const World = GetWorld();
+	if (!EliteProfile.bIsElite || !World)
+	{
+		return;
+	}
+
+	// The heal flare fades from EliteHealFlareMultiplier back to 1 over its duration.
+	const float FlareTimeLeft = EliteHealFlareEndTime - World->GetTimeSeconds();
+	const float Flare = FlareTimeLeft > 0.0f && EliteHealFlareDuration > 0.0f
+		? FMath::Lerp(1.0f, EliteHealFlareMultiplier, FlareTimeLeft / EliteHealFlareDuration)
+		: 1.0f;
+	const float Glow = EliteProfile.Glow * Flare;
+	const float PulseSpeed = GetCurrentPulseSpeed();
+
+	// Materials with the parameters pulse themselves from ElitePulseSpeed, so they get the steady glow.
+	for (UMaterialInstanceDynamic* const DynamicMaterial : FeedbackMaterials)
+	{
+		if (IsValid(DynamicMaterial))
+		{
+			DynamicMaterial->SetScalarParameterValue(EliteGlowParameterName, Glow);
+			DynamicMaterial->SetScalarParameterValue(ElitePulseSpeedParameterName, PulseSpeed);
+		}
+	}
+
+	// The light pulses here, between half and full brightness, because a light has no material to do it.
+	float Pulse = 1.0f;
+	if (PulseSpeed > 0.0f)
+	{
+		ElitePulsePhase = FMath::Fmod(ElitePulsePhase + PulseSpeed * 0.05f, 1.0f);
+		Pulse = 0.75f + 0.25f * FMath::Sin(ElitePulsePhase * UE_TWO_PI);
+	}
+
+	if (EliteLight)
+	{
+		EliteLight->SetIntensity(Glow * Pulse * EliteLightIntensityPerGlow);
+	}
 }
 
 void ANightlightEnemy::SpawnHitSparks(const float AppliedDamage)
@@ -308,10 +505,21 @@ void ANightlightEnemy::AttackTargetDefender()
 
 void ANightlightEnemy::AttackDefender(ANightlightDefender* const Defender)
 {
-	if (IsValid(Defender))
+	DamageDefender(Defender, DefenderAttackDamage);
+}
+
+void ANightlightEnemy::DamageDefender(ANightlightDefender* const Defender, const float Damage)
+{
+	if (!IsValid(Defender) || Defender->IsDead())
 	{
-		Defender->ApplyDamage(FMath::Max(DefenderAttackDamage, 0.0f));
+		return;
 	}
+
+	// The health actually lost, so a Siphon elite never heals from damage past a defender's last health point.
+	const float HealthBefore = Defender->GetCurrentHealth();
+	Defender->ApplyDamage(FMath::Max(Damage, 0.0f));
+	const float HealthAfter = IsValid(Defender) ? Defender->GetCurrentHealth() : 0.0f;
+	NotifyDefenderDamageDealt(HealthBefore - HealthAfter);
 }
 
 bool ANightlightEnemy::ShouldStopForDefender() const
@@ -366,6 +574,7 @@ void ANightlightEnemy::Die()
 	bIsDead = true;
 	SetActorTickEnabled(false);
 	ClearDefenderTarget();
+	GetWorldTimerManager().ClearTimer(EliteVisualTimerHandle);
 
 	// Leave the registry now instead of in EndPlay, so no defender or Core picks this enemy as a
 	// target while its death effect plays.
@@ -391,9 +600,9 @@ void ANightlightEnemy::Die()
 	SetLifeSpan(DeathRemovalDelay);
 }
 
-void ANightlightEnemy::CreateHitFlashMaterials()
+void ANightlightEnemy::CreateFeedbackMaterials()
 {
-	bHasCreatedHitFlashMaterials = true;
+	bHasCreatedFeedbackMaterials = true;
 
 	TArray<UMeshComponent*> Meshes;
 	GetComponents<UMeshComponent>(Meshes);
@@ -407,10 +616,15 @@ void ANightlightEnemy::CreateHitFlashMaterials()
 
 		for (int32 MaterialIndex = 0; MaterialIndex < Mesh->GetNumMaterials(); ++MaterialIndex)
 		{
-			// Only materials with the parameter get a dynamic instance, so the others keep batching together.
+			// Only materials with the hit flash or an elite parameter get a dynamic instance, so the others keep
+			// batching together.
 			UMaterialInterface* const Material = Mesh->GetMaterial(MaterialIndex);
-			float StartingFlash = 0.0f;
-			if (!Material || !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(HitFlashParameterName), StartingFlash))
+			float StartingScalar = 0.0f;
+			FLinearColor StartingColour;
+			if (!Material
+				|| (!Material->GetScalarParameterValue(FHashedMaterialParameterInfo(HitFlashParameterName), StartingScalar)
+					&& !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(EliteGlowParameterName), StartingScalar)
+					&& !Material->GetVectorParameterValue(FHashedMaterialParameterInfo(EliteTintParameterName), StartingColour)))
 			{
 				continue;
 			}
@@ -419,7 +633,7 @@ void ANightlightEnemy::CreateHitFlashMaterials()
 			// (Epic Games, Inc., 2026e; Epic Games, Inc., 2026j).
 			if (UMaterialInstanceDynamic* const DynamicMaterial = Mesh->CreateDynamicMaterialInstance(MaterialIndex, Material))
 			{
-				HitFlashMaterials.Add(DynamicMaterial);
+				FeedbackMaterials.Add(DynamicMaterial);
 			}
 		}
 	}
@@ -432,12 +646,12 @@ void ANightlightEnemy::StartHitFlash()
 		return;
 	}
 
-	if (!bHasCreatedHitFlashMaterials)
+	if (!bHasCreatedFeedbackMaterials)
 	{
-		CreateHitFlashMaterials();
+		CreateFeedbackMaterials();
 	}
 
-	if (HitFlashMaterials.IsEmpty())
+	if (FeedbackMaterials.IsEmpty())
 	{
 		return;
 	}
@@ -470,7 +684,7 @@ void ANightlightEnemy::UpdateHitFlash()
 
 void ANightlightEnemy::SetHitFlashAmount(const float Amount)
 {
-	for (UMaterialInstanceDynamic* const DynamicMaterial : HitFlashMaterials)
+	for (UMaterialInstanceDynamic* const DynamicMaterial : FeedbackMaterials)
 	{
 		if (IsValid(DynamicMaterial))
 		{
@@ -522,6 +736,10 @@ Epic Games, Inc., 2026i. Unreal Engine Actor Lifecycle. [online] Available at:
 Epic Games, Inc., 2026j. UPrimitiveComponent. [online] Available at:
 <https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UPrimitiveComponent>
 [Accessed 30 September 2026].
+
+Epic Games, Inc., 2026k. UPointLightComponent. [online] Available at:
+<https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UPointLightComponent>
+[Accessed 6 November 2026].
 
 Swink, S., 2007. Game Feel: The Secret Ingredient. [online] Available at:
 <https://www.gamedeveloper.com/design/game-feel-the-secret-ingredient> [Accessed 30 September 2026].
