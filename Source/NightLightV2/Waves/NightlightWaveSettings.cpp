@@ -48,6 +48,9 @@ UNightlightWaveSettings::UNightlightWaveSettings()
 	Templates.Add(MakeTemplate(TEXT("Swarm"), 1, 2.0f, 1.0f, 1.0f, ENightlightWaveTemplateCounter::LongRange));
 	Templates.Add(MakeTemplate(TEXT("Skirmish"), 3, 1.0f, 2.0f, 1.0f, ENightlightWaveTemplateCounter::ShortRange));
 	Templates.Add(MakeTemplate(TEXT("Siege"), 5, 1.0f, 1.5f, 2.0f, ENightlightWaveTemplateCounter::Packed));
+
+	// Waves 1 to 4 are eased in at 60% to 90% of their budget, so the player has room to learn the map.
+	EarlyWaveBudgetScale = { 0.6f, 0.7f, 0.8f, 0.9f };
 }
 
 /*

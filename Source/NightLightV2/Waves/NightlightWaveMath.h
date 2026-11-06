@@ -108,10 +108,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	static bool IsBruteWave(const UNightlightWaveSettings* Settings, int32 WaveNumber);
 
-	// (B_0 + g * n) * A, times the Brute wave multiplier on Brute waves, rounded to whole threat points
-	// and never below 1. Waves start at 1.
+	// (B_0 + g * n) * E_n * min(A * U, MaxCombinedBudgetFactor), times the Brute wave multiplier on Brute waves,
+	// rounded to whole threat points and never below 1. Waves start at 1. U is 1 when no upgrades are bought.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
-	static int32 CalculateWaveBudget(const UNightlightWaveSettings* Settings, int32 WaveNumber, float AdaptiveFactor);
+	static int32 CalculateWaveBudget(const UNightlightWaveSettings* Settings, int32 WaveNumber, float AdaptiveFactor, float UpgradeFactor = 1.0f);
+
+	// E_n: the wave's EarlyWaveBudgetScale entry, or 1 for waves past the end of the list.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float GetEarlyWaveBudgetScale(const UNightlightWaveSettings* Settings, int32 WaveNumber);
+
+	// U: 1 + CoreUpgradeBudgetBonus per Core level + DefenderTierBudgetBonus per defender tier, kept between 1
+	// and MaxUpgradeFactor.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	static float CalculateUpgradeFactor(const UNightlightWaveSettings* Settings, int32 CoreUpgradeLevel, int32 DefenderUpgradeTiers);
 
 	// Seconds between spawns: shrinks in a straight line until SpawnGapRampWaves, then stays flat.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")

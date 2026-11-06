@@ -6,6 +6,7 @@
 #include "../Enemies/NightlightEnemySpawner.h"
 #include "../ProceduralGeneration/NightlightWorldGenerator.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../UI/NightlightBlueprintBridge.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 
@@ -190,7 +191,14 @@ void ANightlightWaveDirector::StartWave()
 	++CurrentWaveNumber;
 
 	const UNightlightWaveSettings* const Settings = GetSettings();
-	CurrentWaveBudget = UNightlightWaveMath::CalculateWaveBudget(Settings, CurrentWaveNumber, AdaptiveFactor);
+
+	// U prices what the player has bought, read fresh each wave so an upgrade raises the very next budget, while
+	// A only moves after a wave has been played (Hunicke and Chapman, 2004).
+	const int32 CoreUpgradeLevel = IsValid(BoundDreamCore) ? BoundDreamCore->GetUpgradeLevel() : 0;
+	const int32 DefenderUpgradeTiers = CountDefenderUpgradeTiers();
+	const float UpgradeFactor = UNightlightWaveMath::CalculateUpgradeFactor(Settings, CoreUpgradeLevel, DefenderUpgradeTiers);
+	const float EarlyWaveBudgetScale = UNightlightWaveMath::GetEarlyWaveBudgetScale(Settings, CurrentWaveNumber);
+	CurrentWaveBudget = UNightlightWaveMath::CalculateWaveBudget(Settings, CurrentWaveNumber, AdaptiveFactor, UpgradeFactor);
 
 	// Read how the player has built from the living defenders, then pick a template that counters it
 	// (Epic Games, Inc., 2026g).
@@ -244,6 +252,11 @@ void ANightlightWaveDirector::StartWave()
 	CurrentWaveInfo.EnemyCount = PlannedEntries.Num();
 	CurrentWaveInfo.bIsPeakWave = UNightlightWaveMath::IsBruteWave(Settings, CurrentWaveNumber);
 	CurrentWaveInfo.TemplateName = Template.Name;
+	CurrentWaveInfo.ThreatBudget = CurrentWaveBudget;
+	CurrentWaveInfo.CoreUpgradeLevel = CoreUpgradeLevel;
+	CurrentWaveInfo.DefenderUpgradeTiers = DefenderUpgradeTiers;
+	CurrentWaveInfo.UpgradeFactor = UpgradeFactor;
+	CurrentWaveInfo.EarlyWaveBudgetScale = EarlyWaveBudgetScale;
 
 	if (PlannedEntries.IsEmpty())
 	{
@@ -256,8 +269,10 @@ void ANightlightWaveDirector::StartWave()
 	{
 		RouteText += FString::Printf(TEXT("%s%d: %.2f (%.0f dps)"), RouteIndex > 0 ? TEXT(", ") : TEXT(""), RouteIndex, RouteBaseWeights[RouteIndex], RouteDefence[RouteIndex]);
 	}
-	ShowWaveLine(1, FString::Printf(TEXT("Wave %d%s | %s | budget %d | A %.2f"), CurrentWaveNumber,
-		CurrentWaveInfo.bIsPeakWave ? TEXT(" (peak wave)") : TEXT(""), *Template.Name.ToString(), CurrentWaveBudget, AdaptiveFactor));
+	const FString EasedText = EarlyWaveBudgetScale < 1.0f ? FString::Printf(TEXT(" | eased to %.0f%%"), EarlyWaveBudgetScale * 100.0f) : FString();
+	ShowWaveLine(1, FString::Printf(TEXT("Wave %d%s | %s | budget %d | A %.2f | U %.2f (Core %d, tiers %d)%s"), CurrentWaveNumber,
+		CurrentWaveInfo.bIsPeakWave ? TEXT(" (peak wave)") : TEXT(""), *Template.Name.ToString(), CurrentWaveBudget, AdaptiveFactor,
+		UpgradeFactor, CoreUpgradeLevel, DefenderUpgradeTiers, *EasedText));
 	ShowWaveLine(2, FString::Printf(TEXT("Mix: build-up %s | peak %s | relief %s"),
 		*DescribeEnemies(Settings, BuildUpEnemies), *DescribeEnemies(Settings, PeakEnemies), *DescribeEnemies(Settings, ReliefEnemies)));
 	ShowWaveLine(3, FString::Printf(TEXT("Play style: %.0f%% short range, %.0f%% long range, %.0f apart%s%s%s"),
@@ -360,6 +375,30 @@ void ANightlightWaveDirector::SpawnNextPhaseEnemy()
 	}
 }
 
+int32 ANightlightWaveDirector::CountDefenderUpgradeTiers() const
+{
+	const UNightlightActorRegistrySubsystem* const Registry = GetWorld()->GetSubsystem<UNightlightActorRegistrySubsystem>();
+	if (!Registry)
+	{
+		return 0;
+	}
+
+	// Defender upgrades live in BPI_Upgradeable, so the level is read by name the same way the HUD reads it. A
+	// destroyed defender is skipped, so its tiers stop counting once it is lost.
+	const int32 StartingLevel = FMath::Max(GetSettings()->DefenderStartingUpgradeLevel, 0);
+	int32 Tiers = 0;
+	for (ANightlightDefender* const Defender : Registry->GetDefenders())
+	{
+		int32 Level = StartingLevel;
+		if (IsValid(Defender) && !Defender->IsDead()
+			&& NightlightBlueprintBridge::CallFunction(Defender, TEXT("GetUpgradeLevel"), nullptr, &Level))
+		{
+			Tiers += FMath::Max(Level - StartingLevel, 0);
+		}
+	}
+	return Tiers;
+}
+
 void ANightlightWaveDirector::UpdateRouteWeights()
 {
 	// The registry already lists the living defenders, so no actor search is needed (Epic Games, Inc., 2026g).
@@ -431,6 +470,9 @@ void ANightlightWaveDirector::TryFinishWave()
 	LastWaveSummary.RouteWeights = RouteBaseWeights;
 	LastWaveSummary.TemplateName = CurrentWaveInfo.TemplateName;
 	LastWaveSummary.PlayStyle = WavePlayStyle;
+	LastWaveSummary.CoreUpgradeLevel = CurrentWaveInfo.CoreUpgradeLevel;
+	LastWaveSummary.DefenderUpgradeTiers = CurrentWaveInfo.DefenderUpgradeTiers;
+	LastWaveSummary.UpgradeFactor = CurrentWaveInfo.UpgradeFactor;
 	ChallengeLevel = 0.0f;
 
 	// Score how the player handled the wave and nudge A, which scales the next wave's budget
