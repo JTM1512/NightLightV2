@@ -3,6 +3,7 @@
 #include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../Systems/NightlightTerrainUtils.h"
 #include "../Systems/NightlightVfx.h"
+#include "../UI/NightlightBlueprintBridge.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 
@@ -47,6 +48,9 @@ void ANightlightDefender::BeginPlay()
 	bIsDead = false;
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+
+	// Records the starting level, so only levels bought from here on add health.
+	SyncUpgradeLevel();
 
 	if (CurrentHealth <= 0.0f)
 	{
@@ -98,6 +102,14 @@ void ANightlightDefender::Tick(const float DeltaTime)
 	{
 		TimeUntilTargetSearch = 0.2f;
 		FacingTarget = FindTarget();
+	}
+
+	// Catches upgrades bought through the Blueprint U key, which does not tell the C++ side.
+	TimeUntilUpgradeCheck -= DeltaTime;
+	if (TimeUntilUpgradeCheck <= 0.0f)
+	{
+		TimeUntilUpgradeCheck = 0.25f;
+		SyncUpgradeLevel();
 	}
 
 	// An idle defender keeps the yaw its Blueprint gives it, such as the patroller's circling
@@ -227,6 +239,37 @@ void ANightlightDefender::RestoreFullHealth()
 	CurrentHealth = MaxHealth;
 	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+}
+
+bool ANightlightDefender::SyncUpgradeLevel()
+{
+	int32 Level = 0;
+	if (bIsDead || !NightlightBlueprintBridge::CallFunction(this, TEXT("GetUpgradeLevel"), nullptr, &Level))
+	{
+		return false;
+	}
+
+	if (ObservedUpgradeLevel == INDEX_NONE || Level <= ObservedUpgradeLevel)
+	{
+		// No new level, so Max Health is kept in step with any other change to it.
+		ObservedUpgradeLevel = Level;
+		MaxHealthAtObservedLevel = MaxHealth;
+		return false;
+	}
+
+	// Each level bought must add Health Per Upgrade. The Shooter and Pulse Blueprints already add it, so this
+	// only tops up a Blueprint, like the Patroller, whose upgrade raises other stats but not Max Health.
+	float HealthPerUpgrade = 0.0f;
+	NightlightBlueprintBridge::ReadFloat(this, TEXT("HealthPerUpgrade"), HealthPerUpgrade);
+	const float ExpectedMaxHealth = MaxHealthAtObservedLevel + FMath::Max(HealthPerUpgrade, 0.0f) * (Level - ObservedUpgradeLevel);
+	MaxHealth = FMath::Max(MaxHealth, ExpectedMaxHealth);
+
+	ObservedUpgradeLevel = Level;
+	MaxHealthAtObservedLevel = MaxHealth;
+
+	RestoreFullHealth();
+	PlayUpgradeBurst(Level);
+	return true;
 }
 
 float ANightlightDefender::GetDamagePerSecond() const

@@ -96,6 +96,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
 	void RestoreFullHealth();
 
+	// Reads the level from the Blueprint upgrade (BPI_Upgradeable). When it went up, makes sure Max Health rose
+	// by Health Per Upgrade for each new level, heals to the new max and plays the burst. A Blueprint that
+	// already raised Max Health by that much is left as it is. The defender checks this on its own every
+	// moment, so the U key and the HUD's Upgrade button behave the same; the HUD also calls it straight after
+	// an upgrade so its page updates at once. Returns true when the level went up.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
+	bool SyncUpgradeLevel();
+
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Defender")
 	FNightlightDefenderHealthChangedSignature OnHealthChanged;
 
@@ -176,6 +184,11 @@ private:
 	TObjectPtr<ANightlightEnemy> FacingTarget;
 
 	float TimeUntilTargetSearch = 0.0f;
+	float TimeUntilUpgradeCheck = 0.0f;
+
+	// The upgrade level and Max Health from the last SyncUpgradeLevel. INDEX_NONE until the first check.
+	int32 ObservedUpgradeLevel = INDEX_NONE;
+	float MaxHealthAtObservedLevel = 0.0f;
 
 	// Kept separately so a Blueprint that also sets the rotation, like the patroller, cannot pull
 	// the defender away from its target.
