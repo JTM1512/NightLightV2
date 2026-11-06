@@ -7,6 +7,7 @@
 #include "NightlightDreamCore.generated.h"
 
 class ULightComponent;
+class UNiagaraSystem;
 class USceneComponent;
 class UStaticMeshComponent;
 
@@ -135,6 +136,15 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Nightlight|Dream Core|Upgrades")
 	int32 UpgradeLevel = 0;
+
+	// Optional. Plays at the Core each time it is upgraded, in the new tier's colour and stronger at
+	// each level.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Dream Core|Upgrades")
+	TObjectPtr<UNiagaraSystem> UpgradeBurstSystem;
+
+	// Size of the burst's ground ring, in centimetres.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Dream Core|Upgrades", meta = (ClampMin = "0.0"))
+	float UpgradeBurstRadius = 300.0f;
 
 private:
 	bool bCoreDestroyed = false;

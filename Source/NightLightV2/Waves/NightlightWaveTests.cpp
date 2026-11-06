@@ -67,14 +67,15 @@ bool FNightlightWaveBudgetTest::RunTest(const FString& Parameters)
 
 	UNightlightWaveSettings* const Settings = CreateTestSettings();
 
-	// Budgets from (6 + 3n) * A, with waves 5 and 10 being Brute waves at 25% more.
-	TestEqual(TEXT("Wave 1 budget at A = 1"), UNightlightWaveMath::CalculateWaveBudget(Settings, 1, 1.0f), 9);
-	TestEqual(TEXT("Wave 2 budget at A = 1"), UNightlightWaveMath::CalculateWaveBudget(Settings, 2, 1.0f), 12);
+	// Budgets from (6 + 3n) * E_n * A, with waves 1 to 4 eased in at 60% to 90% and waves 5 and 10 being Brute
+	// waves at 25% more.
+	TestEqual(TEXT("Wave 1 budget at A = 1 is eased to 60%"), UNightlightWaveMath::CalculateWaveBudget(Settings, 1, 1.0f), 5);
+	TestEqual(TEXT("Wave 2 budget at A = 1 is eased to 70%"), UNightlightWaveMath::CalculateWaveBudget(Settings, 2, 1.0f), 8);
 	TestEqual(TEXT("Wave 5 budget at A = 1 includes the Brute wave bonus"), UNightlightWaveMath::CalculateWaveBudget(Settings, 5, 1.0f), 26);
 	TestEqual(TEXT("Wave 10 budget at A = 1 includes the Brute wave bonus"), UNightlightWaveMath::CalculateWaveBudget(Settings, 10, 1.0f), 45);
-	TestEqual(TEXT("Wave 2 budget at the lowest A"), UNightlightWaveMath::CalculateWaveBudget(Settings, 2, 0.75f), 9);
-	TestEqual(TEXT("Wave 2 budget at the highest A"), UNightlightWaveMath::CalculateWaveBudget(Settings, 2, 1.35f), 16);
-	TestEqual(TEXT("A null settings asset uses the same defaults"), UNightlightWaveMath::CalculateWaveBudget(nullptr, 2, 1.0f), 12);
+	TestEqual(TEXT("Wave 2 budget at the lowest A"), UNightlightWaveMath::CalculateWaveBudget(Settings, 2, 0.75f), 6);
+	TestEqual(TEXT("Wave 2 budget at the highest A"), UNightlightWaveMath::CalculateWaveBudget(Settings, 2, 1.35f), 11);
+	TestEqual(TEXT("A null settings asset uses the same defaults"), UNightlightWaveMath::CalculateWaveBudget(nullptr, 2, 1.0f), 8);
 
 	TestTrue(TEXT("Wave 5 is a Brute wave"), UNightlightWaveMath::IsBruteWave(Settings, 5));
 	TestFalse(TEXT("Wave 4 is not a Brute wave"), UNightlightWaveMath::IsBruteWave(Settings, 4));
@@ -132,6 +133,58 @@ bool FNightlightWaveBudgetTest::RunTest(const FString& Parameters)
 		TEXT("Rows without an enemy class are skipped"),
 		UNightlightWaveMath::PlanWaveEnemies(nullptr, 1, 9, NeutralWeights, EmptyStream).Num(),
 		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FNightlightWaveUpgradeBudgetTest,
+	"Nightlight.Waves.UpgradeBudget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FNightlightWaveUpgradeBudgetTest::RunTest(const FString& Parameters)
+{
+	(void)Parameters;
+
+	UNightlightWaveSettings* const Settings = CreateTestSettings();
+
+	// U is 1 with nothing bought, grows by 0.1 per Core level and 0.04 per defender tier, and stops at 1.5.
+	TestEqual(TEXT("U is 1 with nothing bought"), UNightlightWaveMath::CalculateUpgradeFactor(Settings, 0, 0), 1.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("U for Core level 1 and 2 defender tiers"), UNightlightWaveMath::CalculateUpgradeFactor(Settings, 1, 2), 1.18f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("U stops at 1.5"), UNightlightWaveMath::CalculateUpgradeFactor(Settings, 2, 12), 1.5f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Negative counts never lower U below 1"), UNightlightWaveMath::CalculateUpgradeFactor(Settings, -1, -5), 1.0f, KINDA_SMALL_NUMBER);
+
+	// E_n eases waves 1 to 4 and is 1 for every wave after the list.
+	TestEqual(TEXT("Wave 1 is eased to 60%"), UNightlightWaveMath::GetEarlyWaveBudgetScale(Settings, 1), 0.6f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Wave 4 is eased to 90%"), UNightlightWaveMath::GetEarlyWaveBudgetScale(Settings, 4), 0.9f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Wave 5 is not eased"), UNightlightWaveMath::GetEarlyWaveBudgetScale(Settings, 5), 1.0f, KINDA_SMALL_NUMBER);
+	TestEqual(TEXT("Wave 20 is not eased"), UNightlightWaveMath::GetEarlyWaveBudgetScale(Settings, 20), 1.0f, KINDA_SMALL_NUMBER);
+
+	// The opening waves with no upgrades, and wave 6 onwards unchanged from before the rebalance.
+	const int32 ExpectedOpening[] = { 5, 8, 12, 16, 26, 24 };
+	for (int32 WaveNumber = 1; WaveNumber <= 6; ++WaveNumber)
+	{
+		TestEqual(FString::Printf(TEXT("Wave %d budget with no upgrades"), WaveNumber),
+			UNightlightWaveMath::CalculateWaveBudget(Settings, WaveNumber, 1.0f, 1.0f), ExpectedOpening[WaveNumber - 1]);
+	}
+
+	// The worked examples from the rebalance plan.
+	TestEqual(TEXT("Wave 4 with Core 1 and 2 tiers"),
+		UNightlightWaveMath::CalculateWaveBudget(Settings, 4, 1.0f, UNightlightWaveMath::CalculateUpgradeFactor(Settings, 1, 2)), 19);
+	TestEqual(TEXT("Wave 6 with Core 1 and 6 tiers"),
+		UNightlightWaveMath::CalculateWaveBudget(Settings, 6, 1.0f, UNightlightWaveMath::CalculateUpgradeFactor(Settings, 1, 6)), 32);
+	TestEqual(TEXT("Wave 10 with Core 2 and no tiers"),
+		UNightlightWaveMath::CalculateWaveBudget(Settings, 10, 1.0f, UNightlightWaveMath::CalculateUpgradeFactor(Settings, 2, 0)), 54);
+	TestEqual(TEXT("Wave 10 at A = 1.2, fully upgraded, has A times U capped at 1.75"),
+		UNightlightWaveMath::CalculateWaveBudget(Settings, 10, 1.2f, UNightlightWaveMath::CalculateUpgradeFactor(Settings, 2, 12)), 79);
+	TestEqual(TEXT("Wave 6 at the highest A and U is capped at 1.75"),
+		UNightlightWaveMath::CalculateWaveBudget(Settings, 6, 1.35f, 1.5f), 42);
+	TestEqual(TEXT("A U below 1 is treated as 1"),
+		UNightlightWaveMath::CalculateWaveBudget(Settings, 6, 1.0f, 0.5f), 24);
+
+	// An empty easing list turns the easing off, so the asset can go back to the old budgets without code.
+	Settings->EarlyWaveBudgetScale.Reset();
+	TestEqual(TEXT("Wave 1 is 9 with no easing list"), UNightlightWaveMath::CalculateWaveBudget(Settings, 1, 1.0f), 9);
 
 	return true;
 }

@@ -53,13 +53,20 @@ bool UNightlightWaveMath::IsBruteWave(const UNightlightWaveSettings* Settings, c
 int32 UNightlightWaveMath::CalculateWaveBudget(
 	const UNightlightWaveSettings* Settings,
 	const int32 WaveNumber,
-	const float AdaptiveFactor)
+	const float AdaptiveFactor,
+	const float UpgradeFactor)
 {
 	Settings = GetSettingsOrDefault(Settings);
 	const int32 SafeWaveNumber = FMath::Max(WaveNumber, 1);
 
-	// Linear growth, not exponential, so each wave is only a small step harder than the last (Chen, 2007).
-	float Budget = (Settings->StartingBudget + Settings->BudgetGrowthPerWave * SafeWaveNumber) * AdaptiveFactor;
+	// A prices how well the player has been playing and U what they have bought. Their product is capped, so
+	// together they never scale the base budget by more than MaxCombinedBudgetFactor.
+	const float CombinedFactor = FMath::Min(AdaptiveFactor * FMath::Max(UpgradeFactor, 1.0f), FMath::Max(Settings->MaxCombinedBudgetFactor, 1.0f));
+
+	// Linear growth, not exponential, so each wave is only a small step harder than the last, and the first waves
+	// are eased in so the player can find their footing (Chen, 2007).
+	float Budget = (Settings->StartingBudget + Settings->BudgetGrowthPerWave * SafeWaveNumber)
+		* GetEarlyWaveBudgetScale(Settings, SafeWaveNumber) * CombinedFactor;
 
 	if (IsBruteWave(Settings, SafeWaveNumber))
 	{
@@ -67,6 +74,27 @@ int32 UNightlightWaveMath::CalculateWaveBudget(
 	}
 
 	return FMath::Max(FMath::RoundToInt(Budget), 1);
+}
+
+float UNightlightWaveMath::GetEarlyWaveBudgetScale(const UNightlightWaveSettings* Settings, const int32 WaveNumber)
+{
+	Settings = GetSettingsOrDefault(Settings);
+	const int32 Index = FMath::Max(WaveNumber, 1) - 1;
+	return Settings->EarlyWaveBudgetScale.IsValidIndex(Index) ? FMath::Max(Settings->EarlyWaveBudgetScale[Index], 0.0f) : 1.0f;
+}
+
+float UNightlightWaveMath::CalculateUpgradeFactor(
+	const UNightlightWaveSettings* Settings,
+	const int32 CoreUpgradeLevel,
+	const int32 DefenderUpgradeTiers)
+{
+	Settings = GetSettingsOrDefault(Settings);
+
+	// A Core tier adds health and defender slots, so it is worth more than one defender tier.
+	const float Factor = 1.0f
+		+ Settings->CoreUpgradeBudgetBonus * FMath::Max(CoreUpgradeLevel, 0)
+		+ Settings->DefenderTierBudgetBonus * FMath::Max(DefenderUpgradeTiers, 0);
+	return FMath::Clamp(Factor, 1.0f, FMath::Max(Settings->MaxUpgradeFactor, 1.0f));
 }
 
 float UNightlightWaveMath::CalculateSpawnGap(const UNightlightWaveSettings* Settings, const int32 WaveNumber)

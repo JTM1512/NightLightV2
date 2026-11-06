@@ -7,6 +7,7 @@
 
 class USceneComponent;
 class UMaterialInstanceDynamic;
+class UNiagaraSystem;
 class ANightlightDreamCore;
 class ANightlightDefender;
 
@@ -139,6 +140,18 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
 	float HitFlashDuration = 0.15f;
 
+	// Optional. A small spark burst from the middle of the enemy on each hit.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback")
+	TObjectPtr<UNiagaraSystem> HitSparkSystem;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback")
+	FLinearColor HitSparkColor = FLinearColor(1.0f, 0.85f, 0.4f);
+
+	// At most one spark burst in this many seconds, so an enemy under several defenders does not
+	// fill the screen with sparks.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
+	float HitSparkCooldown = 0.1f;
+
 	// A dead enemy stays in the level this long, without collision, so its death effect can play. Zero removes it at once.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Enemy|Feedback", meta = (ClampMin = "0.0"))
 	float DeathRemovalDelay = 0.2f;
@@ -203,6 +216,9 @@ private:
 	void StartHitFlash();
 	void UpdateHitFlash();
 	void SetHitFlashAmount(float Amount);
+
+	float NextHitSparkTime = 0.0f;
+	void SpawnHitSparks(float AppliedDamage);
 
 	bool UpdateDefenderCombat(float DeltaTime);
 	void AttackTargetDefender();

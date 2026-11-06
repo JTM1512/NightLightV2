@@ -3,6 +3,7 @@
 #include "../Defenders/NightlightDefender.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../Systems/NightlightTerrainUtils.h"
+#include "../Systems/NightlightVfx.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/MeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -160,6 +161,7 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 
 	// The lethal hit flashes too, so the player sees the blow that killed the enemy.
 	StartHitFlash();
+	SpawnHitSparks(AppliedDamage);
 
 	if (CurrentHealth > 0.0f)
 	{
@@ -167,6 +169,24 @@ void ANightlightEnemy::ApplyDamage(const float DamageAmount)
 	}
 
 	Die();
+}
+
+void ANightlightEnemy::SpawnHitSparks(const float AppliedDamage)
+{
+	const UWorld* const World = GetWorld();
+	if (!HitSparkSystem || !World || World->GetTimeSeconds() < NextHitSparkTime)
+	{
+		return;
+	}
+
+	NextHitSparkTime = World->GetTimeSeconds() + HitSparkCooldown;
+
+	// The sparks come from the middle of the body, and a hit that takes a bigger share of the health
+	// throws more of them (Epic Games, Inc., 2026a).
+	const FBox Bounds = GetComponentsBoundingBox();
+	const FVector Location = Bounds.IsValid ? Bounds.GetCenter() : GetActorLocation();
+	const float Intensity = MaxHealth > 0.0f ? FMath::Clamp(AppliedDamage / MaxHealth * 2.0f, 0.25f, 0.75f) : 0.5f;
+	NightlightVfx::SpawnBurstAtLocation(HitSparkSystem, this, Location, HitSparkColor, Intensity, 0.0f);
 }
 
 void ANightlightEnemy::MoveAlongRoute(const float DeltaTime)

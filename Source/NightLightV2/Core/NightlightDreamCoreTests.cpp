@@ -55,13 +55,14 @@ bool FNightlightDreamCoreUpgradeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The first upgrade is applied"), Core->UpgradeCore());
 	TestEqual(TEXT("Level 1 after the first upgrade"), Core->GetUpgradeLevel(), 1);
 	TestEqual(TEXT("Max health rises by 50"), Core->GetMaxHealth(), 150.0f);
-	TestEqual(TEXT("Current health rises by 50 and keeps the damage taken"), Core->GetCurrentHealth(), 130.0f);
+	TestEqual(TEXT("The upgrade repairs the Core to the new max"), Core->GetCurrentHealth(), 150.0f);
 	TestEqual(TEXT("Three more defenders are allowed"), Core->GetMaxDefenders(), 9);
 	TestTrue(TEXT("A seventh defender can now be placed"), Core->CanPlaceDefender());
 	TestEqual(TEXT("The second tier costs 300"), Core->GetNextUpgradeCost(), 300);
 
 	TestTrue(TEXT("The second upgrade is applied"), Core->UpgradeCore());
 	TestEqual(TEXT("Max health rises by 75"), Core->GetMaxHealth(), 225.0f);
+	TestEqual(TEXT("The second upgrade also repairs to full"), Core->GetCurrentHealth(), 225.0f);
 	TestEqual(TEXT("Twelve defenders are allowed at the last tier"), Core->GetMaxDefenders(), 12);
 
 	FNightlightUpgradeTier NextTier;

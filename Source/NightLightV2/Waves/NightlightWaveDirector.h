@@ -33,6 +33,26 @@ struct NIGHTLIGHTV2_API FNightlightWaveInfo
 	// Swarm, Skirmish or Siege with the default settings.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	FName TemplateName;
+
+	// Threat points the wave was planned with.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 ThreatBudget = 0;
+
+	// The Core's upgrade level when the wave started.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 CoreUpgradeLevel = 0;
+
+	// Upgrade tiers bought across the defenders still standing when the wave started.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 DefenderUpgradeTiers = 0;
+
+	// U in the budget formula: 1 with nothing bought, up to MaxUpgradeFactor.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float UpgradeFactor = 1.0f;
+
+	// E_n in the budget formula: below 1 on the eased opening waves, 1 after them.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float EarlyWaveBudgetScale = 1.0f;
 };
 
 // How the last wave went. Fields are only ever added here, so Blueprint bindings never break.
@@ -107,6 +127,16 @@ struct NIGHTLIGHTV2_API FNightlightWaveSummary
 	// How the player had built when the wave's template was chosen.
 	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
 	FNightlightPlayStyle PlayStyle;
+
+	// The upgrades the wave's budget was scaled for, as they stood when the wave started.
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 CoreUpgradeLevel = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	int32 DefenderUpgradeTiers = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Nightlight|Waves")
+	float UpgradeFactor = 1.0f;
 };
 
 // How the director changed the pacing after a challenge level check.
@@ -194,6 +224,10 @@ public:
 	// A in the budget formula: above 1 makes waves bigger, below 1 makes them smaller.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
 	float GetAdaptiveFactor() const { return AdaptiveFactor; }
+
+	// U in the budget formula for the current or last wave: above 1 once the player has bought upgrades.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
+	float GetUpgradeFactor() const { return CurrentWaveInfo.UpgradeFactor; }
 
 	// The live challenge level from the last check, from 0 (coasting) to 100 (struggling). 0 outside a wave.
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Waves")
@@ -320,6 +354,7 @@ private:
 	void StartPhase(ENightlightWavePhase Phase);
 	void SpawnNextPhaseEnemy();
 	void UpdateRouteWeights();
+	int32 CountDefenderUpgradeTiers() const;
 	void TryFinishWave();
 	FNightlightWaveMeasures BuildWaveMeasures(float ClearSeconds) const;
 	void StopWaves();

@@ -115,13 +115,38 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Enemies")
 	TArray<FNightlightWaveEnemyEntry> Enemies;
 
-	// B_0 in B_n = (B_0 + g * n) * A.
+	// B_0 in B_n = (B_0 + g * n) * E_n * min(A * U, MaxCombinedBudgetFactor).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Budget", meta = (ClampMin = "0.0"))
 	float StartingBudget = 6.0f;
 
-	// g in B_n = (B_0 + g * n) * A. Linear growth keeps each wave a small step harder (Chen, 2007).
+	// g in the same formula. Linear growth keeps each wave a small step harder (Chen, 2007).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Budget", meta = (ClampMin = "0.0"))
 	float BudgetGrowthPerWave = 3.0f;
+
+	// Budget multipliers for waves 1, 2, 3 and so on, in order. Waves past the end of the list use 1, so only
+	// the opening waves are eased in and the rest of the game keeps its planned budgets (Chen, 2007).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Budget")
+	TArray<float> EarlyWaveBudgetScale;
+
+	// U in the budget formula grows by this for each Core upgrade bought.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Upgrades", meta = (ClampMin = "0.0"))
+	float CoreUpgradeBudgetBonus = 0.1f;
+
+	// U grows by this for each upgrade tier bought on a defender that is still standing.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Upgrades", meta = (ClampMin = "0.0"))
+	float DefenderTierBudgetBonus = 0.04f;
+
+	// The highest U can go, so a fully upgraded base does not run away with the budget.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Upgrades", meta = (ClampMin = "1.0"))
+	float MaxUpgradeFactor = 1.5f;
+
+	// The highest A times U can go, so a skilled player who has also upgraded everything is not buried.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Upgrades", meta = (ClampMin = "1.0"))
+	float MaxCombinedBudgetFactor = 1.75f;
+
+	// The level a defender reports before any upgrade is bought. Tiers are counted from here.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Nightlight|Waves|Upgrades", meta = (ClampMin = "0"))
+	int32 DefenderStartingUpgradeLevel = 0;
 
 	// A in the budget formula, nudged after each wave by the skill score
 	// (Hunicke and Chapman, 2004).

@@ -1,6 +1,7 @@
 ﻿#include "NightlightCrayonHUDWidget.h"
 #include "NightlightBlueprintBridge.h"
 #include "NightlightCrayonScreens.h"
+#include "NightlightHealthWidgetUtils.h"
 #include "NightlightSanityWidgets.h"
 #include "../Core/NightlightDreamCore.h"
 #include "../Defenders/NightlightDefender.h"
@@ -1421,6 +1422,24 @@ void UNightlightCrayonHUDWidget::HandleUpgradeClicked()
 		if (Info.Cost >= 0 && Info.bCanAfford && SpendTokens(Info.Cost))
 		{
 			NightlightBlueprintBridge::CallFunction(Target, TEXT("Upgrade"));
+
+			if (ANightlightDefender* const Defender = Cast<ANightlightDefender>(Target))
+			{
+				// The heal and burst only happen when the Blueprint upgrade really raised the level.
+				int32 NewLevel = Info.Level;
+				NightlightBlueprintBridge::CallFunction(Target, TEXT("GetUpgradeLevel"), nullptr, &NewLevel);
+				if (NewLevel > Info.Level)
+				{
+					// Heals to the new max and refreshes the world health bar, which the Blueprint upgrade
+					// does not update by itself.
+					Defender->RestoreFullHealth();
+					Defender->PlayUpgradeBurst(NewLevel);
+				}
+				else
+				{
+					NightlightHealthWidgetUtils::UpdateWorldHealthWidget(Target, Defender->GetCurrentHealth(), Defender->GetMaxHealth());
+				}
+			}
 		}
 	}
 

@@ -6,6 +6,7 @@
 #include "NightlightDefender.generated.h"
 
 class USceneComponent;
+class UNiagaraSystem;
 class ANightlightEnemy;
 
 // Dynamic multicast delegates let several Blueprints, such as the health bar, bind to the same
@@ -48,6 +49,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
 	void ApplyDamage(float DamageAmount);
 
+	// Remnants call this to restore health. Health never goes above MaxHealth.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
+	void Heal(float HealAmount);
+
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	bool IsDead() const { return bIsDead; }
 
@@ -56,6 +61,19 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	float GetMaxHealth() const { return MaxHealth; }
+
+	// Current health over max health, from 0 to 1.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
+	float GetHealthPercent() const;
+
+	// Blueprints use these instead of writing the variables directly, so the value is clamped, the
+	// health changed event fires and the world health bar stays in sync. Setting health to zero kills the defender.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
+	void SetCurrentHealth(float NewHealth);
+
+	// Current health is clamped to the new max, so lowering the max can also lower the current health.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
+	void SetMaxHealth(float NewMaxHealth, bool bHealToFull = false);
 
 	// The wave director reads these to measure how well each spawn route is defended. BlueprintPure, so they
 	// show as getter nodes without an execution pin (Epic Games, Inc., 2026f).
@@ -68,6 +86,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	ENightlightDefenderStyle GetDefenderStyle() const { return DefenderStyle; }
+
+	// The upgrade itself lives in Blueprint, so the HUD calls this once an upgrade has raised the level.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
+	void PlayUpgradeBurst(int32 NewUpgradeLevel);
+
+	// Heals to the current max and refreshes the health bar. The HUD calls this after an upgrade raised the
+	// level, so the defender comes back at full health with its new max.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
+	void RestoreFullHealth();
 
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Defender")
 	FNightlightDefenderHealthChangedSignature OnHealthChanged;
@@ -122,6 +149,17 @@ protected:
 	// A moving defender, like the patroller, flies this far above the terrain. Zero drives on the ground.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender", meta = (ClampMin = "0.0"))
 	float HoverHeight = 0.0f;
+
+	// Optional. Plays at the defender each time it is upgraded, stronger at each level.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Upgrades")
+	TObjectPtr<UNiagaraSystem> UpgradeBurstSystem;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Upgrades")
+	FLinearColor UpgradeBurstColor = FLinearColor(1.0f, 0.8f, 0.35f);
+
+	// Size of the burst's ground ring, in centimetres.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Upgrades", meta = (ClampMin = "0.0"))
+	float UpgradeBurstRadius = 150.0f;
 
 	// New defender types only override FindTarget and PerformAttack, in C++ or Blueprint.
 	// BlueprintNativeEvent keeps a C++ default that a Blueprint can replace (Epic Games, Inc., 2026f).

@@ -1,6 +1,7 @@
 #include "NightlightDreamCore.h"
 #include "../Enemies/NightlightEnemy.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../Systems/NightlightVfx.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -102,13 +103,13 @@ bool ANightlightDreamCore::UpgradeCore()
 	const FNightlightUpgradeTier& Tier = GetUpgradeTiers()[UpgradeLevel];
 	++UpgradeLevel;
 
-	// Current health rises with the max, so an upgrade also repairs the Core by the bonus.
-	const float HealthBonus = FMath::Max(Tier.MaxHealthBonus, 0.0f);
-	MaxHealth += HealthBonus;
-	CurrentHealth = FMath::Clamp(CurrentHealth + HealthBonus, 0.0f, MaxHealth);
+	// An upgrade raises the max and fully repairs the Core to the new max.
+	MaxHealth += FMath::Max(Tier.MaxHealthBonus, 0.0f);
+	CurrentHealth = MaxHealth;
 	AttackDamage += FMath::Max(Tier.AttackDamageBonus, 0.0f);
 
 	ApplyTierVisuals(Tier);
+	NightlightVfx::SpawnBurst(UpgradeBurstSystem, this, Tier.TintColor, static_cast<float>(UpgradeLevel), UpgradeBurstRadius);
 
 	OnCoreHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 	OnCoreUpgraded.Broadcast(UpgradeLevel, GetMaxUpgradeLevel());
