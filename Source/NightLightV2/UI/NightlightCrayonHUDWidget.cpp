@@ -976,7 +976,7 @@ void UNightlightCrayonHUDWidget::RefreshWaveLabel()
 		else if (Phase != ENightlightWavePhase::NotStarted)
 		{
 			Label = FText::Format(
-				NSLOCTEXT("NightlightCrayon", "WaveLeft", "NIGHT {0} Â· {1} LEFT"),
+				NSLOCTEXT("NightlightCrayon", "WaveLeft", "NIGHT {0} · {1} LEFT"),
 				FText::AsNumber(Director->GetCurrentWaveNumber()), FText::AsNumber(EnemiesLeft));
 		}
 	}
