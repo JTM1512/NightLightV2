@@ -1,6 +1,7 @@
 #include "NightlightDreamCore.h"
 #include "../Enemies/NightlightEnemy.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../Systems/NightlightDreamScreenSubsystem.h"
 #include "../Systems/NightlightVfx.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
@@ -91,6 +92,12 @@ void ANightlightDreamCore::ApplyCoreDamage(const float DamageAmount)
 		GetWorldTimerManager().ClearTimer(AttackTimerHandle);
 		OnCoreDestroyed.Broadcast();
 	}
+
+	// A small dream ripple from the Core shows the hit, even when the Core is off screen.
+	if (UNightlightDreamScreenSubsystem* const DreamScreen = GetWorld() ? GetWorld()->GetSubsystem<UNightlightDreamScreenSubsystem>() : nullptr)
+	{
+		DreamScreen->PlayRippleAt(GetActorLocation(), UNightlightDreamScreenSubsystem::CoreHitRippleStrength);
+	}
 }
 
 bool ANightlightDreamCore::UpgradeCore()
@@ -113,6 +120,11 @@ bool ANightlightDreamCore::UpgradeCore()
 
 	OnCoreHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 	OnCoreUpgraded.Broadcast(UpgradeLevel, GetMaxUpgradeLevel());
+
+	if (UNightlightDreamScreenSubsystem* const DreamScreen = GetWorld() ? GetWorld()->GetSubsystem<UNightlightDreamScreenSubsystem>() : nullptr)
+	{
+		DreamScreen->PlayRippleAt(GetActorLocation(), UNightlightDreamScreenSubsystem::CoreUpgradeRippleStrength);
+	}
 	return true;
 }
 

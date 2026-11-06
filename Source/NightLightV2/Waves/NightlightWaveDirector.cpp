@@ -7,6 +7,7 @@
 #include "../Enemies/NightlightEnemySpawner.h"
 #include "../ProceduralGeneration/NightlightWorldGenerator.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../Systems/NightlightDreamScreenSubsystem.h"
 #include "../UI/NightlightBlueprintBridge.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -296,6 +297,12 @@ void ANightlightWaveDirector::StartWave()
 
 	OnWaveStarted.Broadcast(CurrentWaveInfo);
 	BroadcastEnemiesRemaining();
+
+	// The whole screen ripples as the nightmare starts.
+	if (UNightlightDreamScreenSubsystem* const DreamScreen = GetWorld() ? GetWorld()->GetSubsystem<UNightlightDreamScreenSubsystem>() : nullptr)
+	{
+		DreamScreen->PlayRippleFromScreenCentre(UNightlightDreamScreenSubsystem::WaveStartRippleStrength);
+	}
 
 	// Started before the first phase, because an empty wave finishes inside StartPhase and clears this timer
 	// (Epic Games, Inc., 2026e).
