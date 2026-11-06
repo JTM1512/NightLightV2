@@ -71,3 +71,4 @@ DerivedDataCache/*
 # Editor Python scripts
 Content/Python/
 __pycache__/
+Scripts/

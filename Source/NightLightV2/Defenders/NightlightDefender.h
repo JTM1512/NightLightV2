@@ -6,6 +6,7 @@
 #include "NightlightDefender.generated.h"
 
 class USceneComponent;
+class UNiagaraSystem;
 class ANightlightEnemy;
 
 // Dynamic multicast delegates let several Blueprints, such as the health bar, bind to the same
@@ -69,6 +70,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	ENightlightDefenderStyle GetDefenderStyle() const { return DefenderStyle; }
 
+	// The upgrade itself lives in Blueprint, so the HUD calls this once an upgrade has raised the level.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
+	void PlayUpgradeBurst(int32 NewUpgradeLevel);
+
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Defender")
 	FNightlightDefenderHealthChangedSignature OnHealthChanged;
 
@@ -122,6 +127,17 @@ protected:
 	// A moving defender, like the patroller, flies this far above the terrain. Zero drives on the ground.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender", meta = (ClampMin = "0.0"))
 	float HoverHeight = 0.0f;
+
+	// Optional. Plays at the defender each time it is upgraded, stronger at each level.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Upgrades")
+	TObjectPtr<UNiagaraSystem> UpgradeBurstSystem;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Upgrades")
+	FLinearColor UpgradeBurstColor = FLinearColor(1.0f, 0.8f, 0.35f);
+
+	// Size of the burst's ground ring, in centimetres.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nightlight|Defender|Upgrades", meta = (ClampMin = "0.0"))
+	float UpgradeBurstRadius = 150.0f;
 
 	// New defender types only override FindTarget and PerformAttack, in C++ or Blueprint.
 	// BlueprintNativeEvent keeps a C++ default that a Blueprint can replace (Epic Games, Inc., 2026f).

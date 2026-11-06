@@ -1,6 +1,7 @@
 #include "NightlightDreamCore.h"
 #include "../Enemies/NightlightEnemy.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
+#include "../Systems/NightlightVfx.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -109,6 +110,7 @@ bool ANightlightDreamCore::UpgradeCore()
 	AttackDamage += FMath::Max(Tier.AttackDamageBonus, 0.0f);
 
 	ApplyTierVisuals(Tier);
+	NightlightVfx::SpawnBurst(UpgradeBurstSystem, this, Tier.TintColor, static_cast<float>(UpgradeLevel), UpgradeBurstRadius);
 
 	OnCoreHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 	OnCoreUpgraded.Broadcast(UpgradeLevel, GetMaxUpgradeLevel());

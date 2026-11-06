@@ -2,6 +2,7 @@
 #include "../Enemies/NightlightEnemy.h"
 #include "../Systems/NightlightActorRegistrySubsystem.h"
 #include "../Systems/NightlightTerrainUtils.h"
+#include "../Systems/NightlightVfx.h"
 #include "../UI/NightlightHealthWidgetUtils.h"
 #include "Components/SceneComponent.h"
 
@@ -158,6 +159,16 @@ void ANightlightDefender::ApplyDamage(const float DamageAmount)
 	}
 
 	Die();
+}
+
+void ANightlightDefender::PlayUpgradeBurst(const int32 NewUpgradeLevel)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	NightlightVfx::SpawnBurst(UpgradeBurstSystem, this, UpgradeBurstColor, static_cast<float>(FMath::Max(NewUpgradeLevel, 1)), UpgradeBurstRadius);
 }
 
 float ANightlightDefender::GetDamagePerSecond() const
