@@ -1423,18 +1423,21 @@ void UNightlightCrayonHUDWidget::HandleUpgradeClicked()
 		{
 			NightlightBlueprintBridge::CallFunction(Target, TEXT("Upgrade"));
 
-			// The Blueprint upgrade raises the health without telling the world health bar, so it is
-			// refreshed here instead of waiting for the defender's next hit.
 			if (ANightlightDefender* const Defender = Cast<ANightlightDefender>(Target))
 			{
-				NightlightHealthWidgetUtils::UpdateWorldHealthWidget(Target, Defender->GetCurrentHealth(), Defender->GetMaxHealth());
-
-				// The burst only plays when the Blueprint upgrade really raised the level.
+				// The heal and burst only happen when the Blueprint upgrade really raised the level.
 				int32 NewLevel = Info.Level;
 				NightlightBlueprintBridge::CallFunction(Target, TEXT("GetUpgradeLevel"), nullptr, &NewLevel);
 				if (NewLevel > Info.Level)
 				{
+					// Heals to the new max and refreshes the world health bar, which the Blueprint upgrade
+					// does not update by itself.
+					Defender->RestoreFullHealth();
 					Defender->PlayUpgradeBurst(NewLevel);
+				}
+				else
+				{
+					NightlightHealthWidgetUtils::UpdateWorldHealthWidget(Target, Defender->GetCurrentHealth(), Defender->GetMaxHealth());
 				}
 			}
 		}

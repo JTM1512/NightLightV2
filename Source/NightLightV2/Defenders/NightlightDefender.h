@@ -49,6 +49,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
 	void ApplyDamage(float DamageAmount);
 
+	// Remnants call this to restore health. Health never goes above MaxHealth.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
+	void Heal(float HealAmount);
+
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	bool IsDead() const { return bIsDead; }
 
@@ -57,6 +61,19 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
 	float GetMaxHealth() const { return MaxHealth; }
+
+	// Current health over max health, from 0 to 1.
+	UFUNCTION(BlueprintPure, Category = "Nightlight|Defender")
+	float GetHealthPercent() const;
+
+	// Blueprints use these instead of writing the variables directly, so the value is clamped, the
+	// health changed event fires and the world health bar stays in sync. Setting health to zero kills the defender.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
+	void SetCurrentHealth(float NewHealth);
+
+	// Current health is clamped to the new max, so lowering the max can also lower the current health.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender")
+	void SetMaxHealth(float NewMaxHealth, bool bHealToFull = false);
 
 	// The wave director reads these to measure how well each spawn route is defended. BlueprintPure, so they
 	// show as getter nodes without an execution pin (Epic Games, Inc., 2026f).
@@ -73,6 +90,11 @@ public:
 	// The upgrade itself lives in Blueprint, so the HUD calls this once an upgrade has raised the level.
 	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
 	void PlayUpgradeBurst(int32 NewUpgradeLevel);
+
+	// Heals to the current max and refreshes the health bar. The HUD calls this after an upgrade raised the
+	// level, so the defender comes back at full health with its new max.
+	UFUNCTION(BlueprintCallable, Category = "Nightlight|Defender|Upgrades")
+	void RestoreFullHealth();
 
 	UPROPERTY(BlueprintAssignable, Category = "Nightlight|Defender")
 	FNightlightDefenderHealthChangedSignature OnHealthChanged;

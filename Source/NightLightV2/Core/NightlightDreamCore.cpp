@@ -103,10 +103,9 @@ bool ANightlightDreamCore::UpgradeCore()
 	const FNightlightUpgradeTier& Tier = GetUpgradeTiers()[UpgradeLevel];
 	++UpgradeLevel;
 
-	// Current health rises with the max, so an upgrade also repairs the Core by the bonus.
-	const float HealthBonus = FMath::Max(Tier.MaxHealthBonus, 0.0f);
-	MaxHealth += HealthBonus;
-	CurrentHealth = FMath::Clamp(CurrentHealth + HealthBonus, 0.0f, MaxHealth);
+	// An upgrade raises the max and fully repairs the Core to the new max.
+	MaxHealth += FMath::Max(Tier.MaxHealthBonus, 0.0f);
+	CurrentHealth = MaxHealth;
 	AttackDamage += FMath::Max(Tier.AttackDamageBonus, 0.0f);
 
 	ApplyTierVisuals(Tier);

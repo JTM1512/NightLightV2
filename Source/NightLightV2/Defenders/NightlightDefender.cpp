@@ -161,6 +161,18 @@ void ANightlightDefender::ApplyDamage(const float DamageAmount)
 	Die();
 }
 
+void ANightlightDefender::Heal(const float HealAmount)
+{
+	if (bIsDead || HealAmount <= 0.0f)
+	{
+		return;
+	}
+
+	CurrentHealth = FMath::Clamp(CurrentHealth + HealAmount, 0.0f, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+}
+
 void ANightlightDefender::PlayUpgradeBurst(const int32 NewUpgradeLevel)
 {
 	if (bIsDead)
@@ -169,6 +181,52 @@ void ANightlightDefender::PlayUpgradeBurst(const int32 NewUpgradeLevel)
 	}
 
 	NightlightVfx::SpawnBurst(UpgradeBurstSystem, this, UpgradeBurstColor, static_cast<float>(FMath::Max(NewUpgradeLevel, 1)), UpgradeBurstRadius);
+}
+
+float ANightlightDefender::GetHealthPercent() const
+{
+	return MaxHealth > 0.0f ? FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f) : 0.0f;
+}
+
+void ANightlightDefender::SetCurrentHealth(const float NewHealth)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	CurrentHealth = FMath::Clamp(NewHealth, 0.0f, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
+
+	if (CurrentHealth <= 0.0f)
+	{
+		Die();
+	}
+}
+
+void ANightlightDefender::SetMaxHealth(const float NewMaxHealth, const bool bHealToFull)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	MaxHealth = FMath::Max(NewMaxHealth, 0.0f);
+	SetCurrentHealth(bHealToFull ? MaxHealth : CurrentHealth);
+}
+
+void ANightlightDefender::RestoreFullHealth()
+{
+	if (bIsDead)
+	{
+		return;
+	}
+
+	MaxHealth = FMath::Max(MaxHealth, 0.0f);
+	CurrentHealth = MaxHealth;
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
+	NightlightHealthWidgetUtils::UpdateWorldHealthWidget(this, CurrentHealth, MaxHealth);
 }
 
 float ANightlightDefender::GetDamagePerSecond() const
