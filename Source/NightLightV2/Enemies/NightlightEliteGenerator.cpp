@@ -4,7 +4,7 @@
 namespace
 {
 	// Falls back to the class defaults, which match the planning document, when no asset is assigned.
-	const UNightlightWaveSettings* GetSettingsOrDefault(const UNightlightWaveSettings* const Settings)
+	const UNightlightWaveSettings* GetEliteSettingsOrDefault(const UNightlightWaveSettings* const Settings)
 	{
 		return Settings ? Settings : GetDefault<UNightlightWaveSettings>();
 	}
@@ -25,7 +25,7 @@ namespace
 
 float UNightlightEliteGenerator::CalculateEliteChance(const UNightlightWaveSettings* Settings, const int32 WaveNumber)
 {
-	Settings = GetSettingsOrDefault(Settings);
+	Settings = GetEliteSettingsOrDefault(Settings);
 	if (WaveNumber < Settings->EliteStartWave)
 	{
 		return 0.0f;
@@ -38,7 +38,7 @@ float UNightlightEliteGenerator::CalculateEliteChance(const UNightlightWaveSetti
 
 int32 UNightlightEliteGenerator::GetMutationCount(const UNightlightWaveSettings* Settings, const int32 WaveNumber)
 {
-	Settings = GetSettingsOrDefault(Settings);
+	Settings = GetEliteSettingsOrDefault(Settings);
 	return WaveNumber >= Settings->TwoMutationWave ? 2 : 1;
 }
 
@@ -55,7 +55,7 @@ float UNightlightEliteGenerator::GetMutationWeight(
 	const FNightlightEliteMutationRule& Rule,
 	const FNightlightPlayStyle& PlayStyle)
 {
-	Settings = GetSettingsOrDefault(Settings);
+	Settings = GetEliteSettingsOrDefault(Settings);
 
 	// The Part 2 play-style reading makes the mutation that punishes the player's build more likely, the same way
 	// the wave templates counter it (Hunicke and Chapman, 2004).
@@ -70,7 +70,7 @@ FNightlightEliteProfile UNightlightEliteGenerator::GenerateEliteProfile(
 	const FNightlightPlayStyle& PlayStyle,
 	const ENightlightWaveEnemyRole BaseRole)
 {
-	Settings = GetSettingsOrDefault(Settings);
+	Settings = GetEliteSettingsOrDefault(Settings);
 
 	FNightlightEliteProfile Profile;
 	Profile.bIsElite = true;
